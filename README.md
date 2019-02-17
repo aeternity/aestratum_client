@@ -1,0 +1,2 @@
+# Aeternity stratum client
+
