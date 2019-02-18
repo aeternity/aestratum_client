@@ -1,0 +1,18 @@
+{application, aestratum_client,
+ [{description, "AE Stratum client"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib,
+    crypto,
+    lager,
+    aeminer
+   ]},
+  {mod,{aestratum_client_app,[]}},
+  {env,[]},
+  {modules, []},
+  {maintainers, []},
+  {licenses, []},
+  {links, []}
+ ]}.
