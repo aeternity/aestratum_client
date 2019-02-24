@@ -12,9 +12,9 @@
   {git,"https://github.com/aeternity/aeminer.git",
       {ref,"97b47be6619ba8198d550b9d5ca175d6b1ea7e98"}},
   0},
- {<<"aestratum_jsonrpc">>,
-  {git,"https://github.com/aeternity/aestratum_jsonrpc",
-      {ref,"2e7abafdade38bd1606b3b7b6b92464ec76dad1d"}},
+ {<<"aestratum_lib">>,
+  {git,"https://github.com/aeternity/aestratum_lib",
+      {ref,"090feae8a9604bfb5152d92c9c7143b271f00695"}},
   0},
  {<<"base58">>,
   {git,"https://github.com/aeternity/erl-base58.git",
@@ -24,7 +24,7 @@
   {git,"https://github.com/aeternity/enacl.git",
       {ref,"26180f42c0b3a450905d2efd8bc7fd5fd9cece75"}},
   1},
- {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},2},
+ {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
  {<<"jsx">>,
   {git,"https://github.com/talentdeficit/jsx.git",
       {ref,"fc2a001073f2300ba38427c23e83d5673c020542"}},
@@ -32,7 +32,7 @@
  {<<"lager">>,
   {git,"https://github.com/erlang-lager/lager.git",
       {ref,"69b4ada2341b8ab2cf5c8e464ac936e5e4a9f62b"}},
-  1}]}.
+  0}]}.
 [
 {pkg_hash,[
  {<<"goldrush">>, <<"F06E5D5F1277DA5C413E84D5A2924174182FB108DABB39D5EC548B27424CD106">>}]}
