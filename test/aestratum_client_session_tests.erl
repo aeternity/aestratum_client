@@ -32,25 +32,34 @@ client_session() ->
       fun(Pid) -> t(Pid, when_connected(jsonrpc_rsp_invalid_msg)) end,
       fun(Pid) -> t(Pid, when_connected(jsonrpc_rsp_invalid_method)) end,
       fun(Pid) -> t(Pid, when_connected(jsonrpc_rsp_invalid_param)) end,
+      fun(Pid) -> t(Pid, when_connected(subscribe_rsp)) end,
+      fun(Pid) -> t(Pid, when_connected(authorize_rsp)) end,
       %% connected - success
-      fun(Pid) -> t(Pid, when_connected(success_rsp)) end,
+      fun(Pid) -> t(Pid, when_connected(configure_rsp)) end,
+
       %% configure - error
       fun(Pid) -> t(Pid, when_configured(timeout)) end,
       fun(Pid) -> t(Pid, when_configured(jsonrpc_rsp_parse_error)) end,
       fun(Pid) -> t(Pid, when_configured(jsonrpc_rsp_invalid_msg)) end,
       fun(Pid) -> t(Pid, when_configured(jsonrpc_rsp_invalid_method)) end,
       fun(Pid) -> t(Pid, when_configured(jsonrpc_rsp_invalid_param)) end,
+      fun(Pid) -> t(Pid, when_configured(configure_rsp)) end,
+      fun(Pid) -> t(Pid, when_configured(authorize_rsp)) end,
       %% configure - success
-      fun(Pid) -> t(Pid, when_configured(success_rsp)) end,
+      fun(Pid) -> t(Pid, when_configured(subscribe_rsp)) end,
+
       %% subscribe - error
       fun(Pid) -> t(Pid, when_subscribed(timeout)) end,
       fun(Pid) -> t(Pid, when_subscribed(jsonrpc_rsp_parse_error)) end,
       fun(Pid) -> t(Pid, when_subscribed(jsonrpc_rsp_invalid_msg)) end,
       fun(Pid) -> t(Pid, when_subscribed(jsonrpc_rsp_invalid_method)) end,
       fun(Pid) -> t(Pid, when_subscribed(jsonrpc_rsp_invalid_param)) end,
-      fun(Pid) -> t(Pid, when_subscribed(failure_rsp)) end,
+      fun(Pid) -> t(Pid, when_subscribed(configure_rsp)) end,
+      fun(Pid) -> t(Pid, when_subscribed(subscribe_rsp)) end,
+      fun(Pid) -> t(Pid, when_subscribed(authorize_failure_rsp)) end,
       %% subscribe - success
-      fun(Pid) -> t(Pid, when_subscribed(success_rsp)) end,
+      fun(Pid) -> t(Pid, when_subscribed(authorize_success_rsp)) end,
+
       %% authorize - ???
       fun(Pid) -> t(Pid, when_authorized(timeout)) end
       ]}.
@@ -153,8 +162,21 @@ when_connected(jsonrpc_rsp_invalid_param) ->
     T = <<"when connected - jsonrpc_rsp_invalid_param">>,
     {E, R} = conn_make_invalid_param(disconnected, #{}),
     prep_connected(T) ++ [{T, test, E, R}];
-when_connected(success_rsp) ->
-    T = <<"when connected - success_rsp">>,
+when_connected(subscribe_rsp) ->
+    T = <<"when connected - subsribe_rsp">>,
+    L = [{{conn, #{type => rsp, method => subscribe, id => 0,
+                   result => [null, <<"00112233">>]}},
+          {stop, #{phase => disconnected, reqs => #{}}}
+         }],
+    prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_connected(authorize_rsp) ->
+    T = <<"when connected - subsribe_rsp">>,
+    L = [{{conn, #{type => rsp, method => authorize, id => 0, result => true}},
+          {stop, #{phase => disconnected, reqs => #{}}}
+         }],
+    prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_connected(configure_rsp) ->
+    T = <<"when connected - configure_rsp">>,
     L = [{{conn, #{type => rsp, method => configure, id => 0, result => []}},
           {send,
            #{type => req, method => subscribe, id => 1},
@@ -191,7 +213,22 @@ when_configured(jsonrpc_rsp_invalid_param) ->
     T = <<"when configured - jsonrpc_rsp_invalid_param">>,
     {E, R} = conn_make_invalid_param(disconnected, #{}),
     prep_configured(T) ++ [{T, test, E, R}];
-when_configured(success_rsp) ->
+when_configured(configure_rsp) ->
+    T = <<"when configured - configure_rsp">>,
+    L = [{{conn, #{type => rsp, method => configure, id => 1,
+                   result => []}},
+          {stop,
+           #{phase => disconnected, reqs => #{}}}
+         }],
+    prep_configured(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_configured(authorize_rsp) ->
+    T = <<"when configured - authorize_rsp">>,
+    L = [{{conn, #{type => rsp, method => authorize, id => 1, result => false}},
+          {stop,
+           #{phase => disconnected, reqs => #{}}}
+         }],
+    prep_configured(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_configured(subscribe_rsp) ->
     T = <<"when configured - success_rsp">>,
     L = [{{conn, #{type => rsp, method => subscribe, id => 1,
                    result => [null, <<"01020304">>]}},
@@ -229,15 +266,30 @@ when_subscribed(jsonrpc_rsp_invalid_param) ->
     T = <<"when subscribed - jsonrpc_rsp_invalid_param">>,
     {E, R} = conn_make_invalid_param(disconnected, #{}),
     prep_subscribed(T) ++ [{T, test, E, R}];
-when_subscribed(failure_rsp) ->
-    T = <<"when subscribed - failure_rsp">>,
+when_subscribed(configure_rsp) ->
+    T = <<"when subscribed - configure_rsp">>,
+    L = [{{conn, #{type => rsp, method => configure, id => 2, result => []}},
+          {stop,
+           #{phase => disconnected, reqs => #{}}}
+         }],
+    prep_subscribed(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_subscribed(subscribe_rsp) ->
+    T = <<"when subscribed - subscribe_rsp">>,
+    L = [{{conn, #{type => rsp, method => subscribe, id => 2,
+                   result => [null, <<"0011">>]}},
+          {stop,
+           #{phase => disconnected, reqs => #{}}}
+         }],
+    prep_subscribed(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_subscribed(authorize_failure_rsp) ->
+    T = <<"when subscribed - authorize_failure_rsp">>,
     L = [{{conn, #{type => rsp, method => authorize, id => 2, result => false}},
           {stop,
            #{phase => disconnected, reqs => #{}}}
          }],
     prep_subscribed(T) ++ [{T, test, E, R} || {E, R} <- L];
-when_subscribed(success_rsp) ->
-    T = <<"when subscribed - success_rsp">>,
+when_subscribed(authorize_success_rsp) ->
+    T = <<"when subscribed - authorize_success_rsp">>,
     L = [{{conn, #{type => rsp, method => authorize, id => 2, result => true}},
           {no_send,
            #{phase => authorized, reqs => #{}}}
