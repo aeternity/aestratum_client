@@ -13,7 +13,8 @@
           phase,
           req_id = 0,
           reqs = maps:new(),   %% cache of sent requests
-          retries = 0
+          retries = 0,
+          target
         }).
 
 -define(MAX_RETRIES, application:get_env(aestratum, max_retries, 3)).
@@ -64,7 +65,7 @@ recv_msg(#{type := rsp, id := Id} = Rsp, #state{reqs = Reqs} = State) ->
                     %% Response validation success. The request to which the
                     %% response was sent is deleted from the sent requests and
                     %% timer is cancelled, too.
-                    recv_msg1(Rsp1, State#state{reqs = del_req(Id, Reqs)});
+                    recv_rsp(Rsp1, State#state{reqs = del_req(Id, Reqs)});
                 {error, Rsn} ->
                     %% Response validation error.
                     recv_msg_error(Rsn, State)
@@ -74,43 +75,53 @@ recv_msg(#{type := rsp, id := Id} = Rsp, #state{reqs = Reqs} = State) ->
             %% TODO: log
             {no_send, State}
     end;
-recv_msg(#{type := ntf} = _Ntf, State) ->
-    {no_send, State};
+recv_msg(#{type := ntf} = Ntf, State) ->
+    recv_ntf(Ntf, State);
 recv_msg(#{type := req, method := reconnect} = Req, State) ->
     %% TODO
     {no_send, State}.
 
 %% Handle decoded (without error) message from server.
 
-recv_msg1(#{method := configure, result := []},
+recv_rsp(#{method := configure, result := []},
           #state{phase = connected} = State) ->
     %% TODO: configure has no params (yet).
     send_req(subscribe, State#state{phase = configured, retries = 0});
-recv_msg1(#{method := subscribe, result := [SessionId, ExtraNonce]},
+recv_rsp(#{method := subscribe, result := [SessionId, ExtraNonce]},
           #state{phase = configured} = State) ->
     %% TODO: log successful subscribe
     %% TODO: save SessionId(?) and ExtraNonce
     send_req(authorize, State#state{phase = subscribed, retries = 0});
-recv_msg1(#{method := authorize, result := true},
+recv_rsp(#{method := authorize, result := true},
           #state{phase = subscribed} = State) ->
     %% TODO: log authorization success
     {no_send, State#state{phase = authorized, retries = 0}};
-recv_msg1(#{method := authorize, result := false},
+recv_rsp(#{method := authorize, result := false},
           #state{phase = subscribed} = State) ->
     %% TODO: log invalid user/password
     {stop, close_session(State)};
-recv_msg1(#{method := submit, result := true},
+recv_rsp(#{method := submit, result := true},
           #state{phase = authorized} = State) ->
     %% TODO: log successful submit
     {no_send, State};
-recv_msg1(#{method := submit, result := false},
+recv_rsp(#{method := submit, result := false},
           #state{phase = authorized} = State) ->
     %% TODO: log unsuccessful submit
     {no_send, State};
-recv_msg1(#{method := Method, reason := Rsn, msg := ErrMsg,
+recv_rsp(#{method := Method, reason := Rsn, msg := ErrMsg,
             data := ErrData}, State) ->
     %% TODO: log error response
     %% TODO: maybe retry
+    {no_send, State}.
+
+recv_ntf(#{method := set_target, target := Target},
+         #state{phase = authorized} = State) ->
+    %% TODO: add aestratum_target to aestratum_lib anf use finctions from there
+    %% to work with the target.
+    {no_send, State#state{target = binary_to_integer(Target, 16)}};
+%% TODO: notify
+recv_ntf(#{method := _Method}, State) ->
+    %% TODO: log unexpected notification if not in authorized phase.
     {no_send, State}.
 
 %% Handle badly encoded/invalid messages from server.
@@ -235,10 +246,20 @@ encode(Map) ->
 %% Used for testing.
 
 -ifdef(TEST).
-state(#state{phase = Phase, req_id = ReqId, reqs = Reqs, retries = Retries}) ->
+state(#state{phase = Phase, req_id = ReqId, reqs = Reqs, retries = Retries,
+             target = Target}) ->
+    Target1 =
+        case Target of
+            T when T =/= undefined ->
+                iolist_to_binary(io_lib:format("~64.16.0b", [T]));
+            undefined ->
+                undefined
+        end,
     #{phase   => Phase,
       req_id  => ReqId,
       reqs    => maps:map(fun(Id, {_TRef, Phase, _Req}) -> Phase end, Reqs),
-      retries => Retries}.
+      retries => Retries,
+      target  => Target1
+     }.
 -endif.
 

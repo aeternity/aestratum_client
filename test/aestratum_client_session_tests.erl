@@ -5,6 +5,9 @@
 -define(TEST_MODULE, aestratum_client_session).
 -define(JSONRPC_MODULE, aestratum_jsonrpc).
 
+-define(TEST_TARGET,
+        <<"0000ff0000000000000000000000000000000000000000000000000000000000">>).
+
 session_test_() ->
     {setup,
      fun() ->
@@ -34,6 +37,7 @@ client_session() ->
       fun(Pid) -> t(Pid, when_connected(jsonrpc_rsp_invalid_param)) end,
       fun(Pid) -> t(Pid, when_connected(subscribe_rsp)) end,
       fun(Pid) -> t(Pid, when_connected(authorize_rsp)) end,
+      fun(Pid) -> t(Pid, when_connected(set_target_ntf)) end,
       %% connected - success
       fun(Pid) -> t(Pid, when_connected(configure_rsp)) end,
 
@@ -45,6 +49,7 @@ client_session() ->
       fun(Pid) -> t(Pid, when_configured(jsonrpc_rsp_invalid_param)) end,
       fun(Pid) -> t(Pid, when_configured(configure_rsp)) end,
       fun(Pid) -> t(Pid, when_configured(authorize_rsp)) end,
+      fun(Pid) -> t(Pid, when_configured(set_target_ntf)) end,
       %% configure - success
       fun(Pid) -> t(Pid, when_configured(subscribe_rsp)) end,
 
@@ -57,11 +62,14 @@ client_session() ->
       fun(Pid) -> t(Pid, when_subscribed(configure_rsp)) end,
       fun(Pid) -> t(Pid, when_subscribed(subscribe_rsp)) end,
       fun(Pid) -> t(Pid, when_subscribed(authorize_failure_rsp)) end,
+      fun(Pid) -> t(Pid, when_subscribed(set_target_ntf)) end,
       %% subscribe - success
       fun(Pid) -> t(Pid, when_subscribed(authorize_success_rsp)) end,
 
-      %% authorize - ???
-      fun(Pid) -> t(Pid, when_authorized(timeout)) end
+      %% authorize - error
+      fun(Pid) -> t(Pid, when_authorized(timeout)) end,
+      %% authorize - success
+      fun(Pid) -> t(Pid, when_authorized(set_target_ntf)) end
       ]}.
 
 
@@ -175,6 +183,13 @@ when_connected(authorize_rsp) ->
           {stop, #{phase => disconnected, reqs => #{}}}
          }],
     prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_connected(set_target_ntf) ->
+    T = <<"when connected - set_target_ntf">>,
+    L = [{{conn, #{type => ntf, method => set_target, target => ?TEST_TARGET}},
+          {no_send,
+           #{phase => connected}}
+         }],
+    prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L];
 when_connected(configure_rsp) ->
     T = <<"when connected - configure_rsp">>,
     L = [{{conn, #{type => rsp, method => configure, id => 0, result => []}},
@@ -226,6 +241,13 @@ when_configured(authorize_rsp) ->
     L = [{{conn, #{type => rsp, method => authorize, id => 1, result => false}},
           {stop,
            #{phase => disconnected, reqs => #{}}}
+         }],
+    prep_configured(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_configured(set_target_ntf) ->
+    T = <<"when configured - set_target_ntf">>,
+    L = [{{conn, #{type => ntf, method => set_target, target => ?TEST_TARGET}},
+          {no_send,
+           #{phase => configured}}
          }],
     prep_configured(T) ++ [{T, test, E, R} || {E, R} <- L];
 when_configured(subscribe_rsp) ->
@@ -288,6 +310,13 @@ when_subscribed(authorize_failure_rsp) ->
            #{phase => disconnected, reqs => #{}}}
          }],
     prep_subscribed(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_subscribed(set_target_ntf) ->
+    T = <<"when subscribed - set_target_ntf">>,
+    L = [{{conn, #{type => ntf, method => set_target, target => ?TEST_TARGET}},
+          {no_send,
+           #{phase => subscribed}}
+         }],
+    prep_subscribed(T) ++ [{T, test, E, R} || {E, R} <- L];
 when_subscribed(authorize_success_rsp) ->
     T = <<"when subscribed - authorize_success_rsp">>,
     L = [{{conn, #{type => rsp, method => authorize, id => 2, result => true}},
@@ -302,6 +331,13 @@ when_authorized(timeout) ->
         {no_send,
          #{phase => authorized, reqs => #{}}}
        }],
+    prep_authorized(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_authorized(set_target_ntf) ->
+    T = <<"when authorized - set_target_ntf">>,
+    L = [{{conn, #{type => ntf, method => set_target, target => ?TEST_TARGET}},
+          {no_send,
+           #{phase => authorized, target => ?TEST_TARGET}}
+         }],
     prep_authorized(T) ++ [{T, test, E, R} || {E, R} <- L].
 
 prep_connected(T) ->
