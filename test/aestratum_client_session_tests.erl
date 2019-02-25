@@ -4,6 +4,7 @@
 
 -define(TEST_MODULE, aestratum_client_session).
 -define(JSONRPC_MODULE, aestratum_jsonrpc).
+-define(NONCE_MODULE, aestratum_nonce).
 
 -define(TEST_TARGET,
         <<"0000ff0000000000000000000000000000000000000000000000000000000000">>).
@@ -211,7 +212,8 @@ when_connected(configure_rsp) ->
     L = [{{conn, #{type => rsp, method => configure, id => 0, result => []}},
           {send,
            #{type => req, method => subscribe, id => 1},
-           #{phase => configured, reqs => #{1 => configured}}}
+           #{phase => configured, reqs => #{1 => configured},
+             extra_nonce => undefined}}
          }],
     prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L].
 
@@ -277,11 +279,13 @@ when_configured(notify_ntf) ->
     prep_configured(T) ++ [{T, test, E, R} || {E, R} <- L];
 when_configured(subscribe_rsp) ->
     T = <<"when configured - success_rsp">>,
+    ExtraNonce = ?NONCE_MODULE:new(extra, 16#01020304, 4),
     L = [{{conn, #{type => rsp, method => subscribe, id => 1,
-                   result => [null, <<"01020304">>]}},
+                   result => [null, ?NONCE_MODULE:to_hex(ExtraNonce)]}},
           {send,
            #{type => req, method => authorize, id => 2},
-           #{phase => subscribed, reqs => #{2 => subscribed}}}
+           #{phase => subscribed, reqs => #{2 => subscribed},
+             extra_nonce => ExtraNonce}}
          }],
     prep_configured(T) ++ [{T, test, E, R} || {E, R} <- L].
 

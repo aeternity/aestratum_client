@@ -14,6 +14,7 @@
           req_id = 0,
           reqs = maps:new(),   %% cache of sent requests
           retries = 0,
+          extra_nonce,
           target
         }).
 
@@ -90,8 +91,12 @@ recv_rsp(#{method := configure, result := []},
 recv_rsp(#{method := subscribe, result := [SessionId, ExtraNonce]},
           #state{phase = configured} = State) ->
     %% TODO: log successful subscribe
-    %% TODO: save SessionId(?) and ExtraNonce
-    send_req(authorize, State#state{phase = subscribed, retries = 0});
+    %% TODO: save SessionId(?)
+    NBytes = byte_size(ExtraNonce) div 2,
+    ExtraNonce1 = aestratum_nonce:to_int(extra, ExtraNonce, NBytes),
+    ExtraNonce2 = aestratum_nonce:new(extra, ExtraNonce1, NBytes),
+    send_req(authorize, State#state{phase = subscribed, retries = 0,
+                                    extra_nonce = ExtraNonce2});
 recv_rsp(#{method := authorize, result := true},
           #state{phase = subscribed} = State) ->
     %% TODO: log authorization success
@@ -251,7 +256,7 @@ encode(Map) ->
 
 -ifdef(TEST).
 state(#state{phase = Phase, req_id = ReqId, reqs = Reqs, retries = Retries,
-             target = Target}) ->
+             extra_nonce = ExtraNonce, target = Target}) ->
     Target1 =
         case Target of
             T when T =/= undefined ->
@@ -259,11 +264,12 @@ state(#state{phase = Phase, req_id = ReqId, reqs = Reqs, retries = Retries,
             undefined ->
                 undefined
         end,
-    #{phase   => Phase,
-      req_id  => ReqId,
-      reqs    => maps:map(fun(Id, {_TRef, Phase, _Req}) -> Phase end, Reqs),
-      retries => Retries,
-      target  => Target1
+    #{phase       => Phase,
+      req_id      => ReqId,
+      reqs        => maps:map(fun(Id, {_TRef, Phase, _Req}) -> Phase end, Reqs),
+      retries     => Retries,
+      extra_nonce => ExtraNonce,
+      target      => Target1
      }.
 -endif.
 
