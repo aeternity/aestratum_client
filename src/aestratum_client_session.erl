@@ -121,9 +121,7 @@ recv_rsp(#{method := Method, reason := Rsn, msg := ErrMsg,
 
 recv_ntf(#{method := set_target, target := Target},
          #state{phase = authorized} = State) ->
-    %% TODO: add aestratum_target to aestratum_lib anf use finctions from there
-    %% to work with the target.
-    {no_send, State#state{target = binary_to_integer(Target, 16)}};
+    {no_send, State#state{target = aestratum_target:to_int(Target)}};
 recv_ntf(#{method := notify, job_id := JobId, block_version := Blockversion,
            block_hash := BlockHash, empty_queue := EmptyQueue},
          #state{phase = authorized} = State) ->
@@ -260,7 +258,7 @@ state(#state{phase = Phase, req_id = ReqId, reqs = Reqs, retries = Retries,
     Target1 =
         case Target of
             T when T =/= undefined ->
-                iolist_to_binary(io_lib:format("~64.16.0b", [T]));
+                aestratum_target:to_hex(T);
             undefined ->
                 undefined
         end,
