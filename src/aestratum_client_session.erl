@@ -119,7 +119,11 @@ recv_ntf(#{method := set_target, target := Target},
     %% TODO: add aestratum_target to aestratum_lib anf use finctions from there
     %% to work with the target.
     {no_send, State#state{target = binary_to_integer(Target, 16)}};
-%% TODO: notify
+recv_ntf(#{method := notify, job_id := JobId, block_version := Blockversion,
+           block_hash := BlockHash, empty_queue := EmptyQueue},
+         #state{phase = authorized} = State) ->
+    %% TODO: create new job, maybe stop the running ones, log, ...
+    {no_send, State};
 recv_ntf(#{method := _Method}, State) ->
     %% TODO: log unexpected notification if not in authorized phase.
     {no_send, State}.

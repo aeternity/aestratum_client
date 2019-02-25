@@ -7,6 +7,9 @@
 
 -define(TEST_TARGET,
         <<"0000ff0000000000000000000000000000000000000000000000000000000000">>).
+-define(TEST_JOB_ID, <<"0102030405060708">>).
+-define(TEST_BLOCK_HASH,
+        <<"000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f">>).
 
 session_test_() ->
     {setup,
@@ -38,6 +41,7 @@ client_session() ->
       fun(Pid) -> t(Pid, when_connected(subscribe_rsp)) end,
       fun(Pid) -> t(Pid, when_connected(authorize_rsp)) end,
       fun(Pid) -> t(Pid, when_connected(set_target_ntf)) end,
+      fun(Pid) -> t(Pid, when_connected(notify_ntf)) end,
       %% connected - success
       fun(Pid) -> t(Pid, when_connected(configure_rsp)) end,
 
@@ -50,6 +54,7 @@ client_session() ->
       fun(Pid) -> t(Pid, when_configured(configure_rsp)) end,
       fun(Pid) -> t(Pid, when_configured(authorize_rsp)) end,
       fun(Pid) -> t(Pid, when_configured(set_target_ntf)) end,
+      fun(Pid) -> t(Pid, when_configured(notify_ntf)) end,
       %% configure - success
       fun(Pid) -> t(Pid, when_configured(subscribe_rsp)) end,
 
@@ -63,13 +68,15 @@ client_session() ->
       fun(Pid) -> t(Pid, when_subscribed(subscribe_rsp)) end,
       fun(Pid) -> t(Pid, when_subscribed(authorize_failure_rsp)) end,
       fun(Pid) -> t(Pid, when_subscribed(set_target_ntf)) end,
+      fun(Pid) -> t(Pid, when_subscribed(notify_ntf)) end,
       %% subscribe - success
       fun(Pid) -> t(Pid, when_subscribed(authorize_success_rsp)) end,
 
       %% authorize - error
       fun(Pid) -> t(Pid, when_authorized(timeout)) end,
       %% authorize - success
-      fun(Pid) -> t(Pid, when_authorized(set_target_ntf)) end
+      fun(Pid) -> t(Pid, when_authorized(set_target_ntf)) end,
+      fun(Pid) -> t(Pid, when_authorized(notify_ntf)) end
       ]}.
 
 
@@ -190,6 +197,15 @@ when_connected(set_target_ntf) ->
            #{phase => connected}}
          }],
     prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_connected(notify_ntf) ->
+    T = <<"when connected - notify_ntf">>,
+    L = [{{conn, #{type => ntf, method => notify, job_id => ?TEST_JOB_ID,
+                   block_version => 1, block_hash => ?TEST_BLOCK_HASH,
+                   empty_queue => true}},
+          {no_send,
+           #{phase => connected}}
+         }],
+    prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L];
 when_connected(configure_rsp) ->
     T = <<"when connected - configure_rsp">>,
     L = [{{conn, #{type => rsp, method => configure, id => 0, result => []}},
@@ -246,6 +262,15 @@ when_configured(authorize_rsp) ->
 when_configured(set_target_ntf) ->
     T = <<"when configured - set_target_ntf">>,
     L = [{{conn, #{type => ntf, method => set_target, target => ?TEST_TARGET}},
+          {no_send,
+           #{phase => configured}}
+         }],
+    prep_configured(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_configured(notify_ntf) ->
+    T = <<"when configured - notify_ntf">>,
+    L = [{{conn, #{type => ntf, method => notify, job_id => ?TEST_JOB_ID,
+                   block_version => 1, block_hash => ?TEST_BLOCK_HASH,
+                   empty_queue => true}},
           {no_send,
            #{phase => configured}}
          }],
@@ -317,6 +342,15 @@ when_subscribed(set_target_ntf) ->
            #{phase => subscribed}}
          }],
     prep_subscribed(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_subscribed(notify_ntf) ->
+    T = <<"when subscribed - notify_ntf">>,
+    L = [{{conn, #{type => ntf, method => notify, job_id => ?TEST_JOB_ID,
+                   block_version => 1, block_hash => ?TEST_BLOCK_HASH,
+                   empty_queue => true}},
+          {no_send,
+           #{phase => subscribed}}
+         }],
+    prep_subscribed(T) ++ [{T, test, E, R} || {E, R} <- L];
 when_subscribed(authorize_success_rsp) ->
     T = <<"when subscribed - authorize_success_rsp">>,
     L = [{{conn, #{type => rsp, method => authorize, id => 2, result => true}},
@@ -337,6 +371,15 @@ when_authorized(set_target_ntf) ->
     L = [{{conn, #{type => ntf, method => set_target, target => ?TEST_TARGET}},
           {no_send,
            #{phase => authorized, target => ?TEST_TARGET}}
+         }],
+    prep_authorized(T) ++ [{T, test, E, R} || {E, R} <- L];
+when_authorized(notify_ntf) ->
+    T = <<"when authorized - notify_ntf">>,
+    L = [{{conn, #{type => ntf, method => notify, job_id => ?TEST_JOB_ID,
+                   block_version => 1, block_hash => ?TEST_BLOCK_HASH,
+                   empty_queue => true}},
+          {no_send,
+           #{phase => authorized}}
          }],
     prep_authorized(T) ++ [{T, test, E, R} || {E, R} <- L].
 
