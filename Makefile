@@ -2,6 +2,13 @@ REBAR = ./rebar3
 
 .PHONY: all dialyzer ct eunit clean distclean console
 
+EUNIT_TEST_FLAGS ?=
+
+ifdef TEST
+EUNIT_TEST_FLAGS += --module=$(TEST)
+unexport TEST
+endif
+
 all:
 	$(REBAR) compile
 
@@ -15,7 +22,8 @@ ct:
 	$(REBAR) ct
 
 eunit:
-	$(REBAR) eunit --module=aestratum_client_session_tests
+	$(REBAR) eunit $(EUNIT_TEST_FLAGS)
+
 
 clean:
 	$(REBAR) clean
