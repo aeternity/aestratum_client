@@ -6,7 +6,6 @@
    [kernel,
     stdlib,
     crypto,
-    lager,
     aestratum_lib,
     aeminer
    ]},
