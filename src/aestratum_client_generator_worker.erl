@@ -73,6 +73,7 @@
 
 -opaque worker()        :: #worker{}.
 
+%% TODO queue of jobs
 -record(state, {
           miner         :: miner(),
           worker        :: worker()
@@ -91,7 +92,7 @@ stop(Pid) ->
 
 -spec generate(pid(), job(), extra_nonce(), miner_nonce()) -> ok.
 generate(Pid, Job, ExtraNonce, MinerNonce) ->
-    gen_server:cast(Pid, {generate, Job, ExtraNonce, MinerNonce}).
+    gen_server:call(Pid, {generate, Job, ExtraNonce, MinerNonce}).
 
 -spec pid(worker()) -> pid().
 pid(#worker{pid = Pid}) ->
@@ -130,15 +131,19 @@ status(Pid) ->
 init(Miner) ->
     process_flag(trap_exit, true),
     MinerId = aestratum_client_miner:id(Miner),
-    aestratum_client_generator_register:add(MinerId, self()),
+    aestratum_client_generator_manager:add(MinerId, self()),
     {ok, #state{miner = Miner}}.
 
+handle_call({generate, Job, ExtraNonce, MinerNonce}, _From, State) ->
+    Action = abort_running_worker(Job),
+    {ok, Reply, State1} =
+        handle_generate(Action, Job, ExtraNonce, MinerNonce, State),
+    {reply, Reply, State1};
 handle_call(status, _From, #state{miner = Miner, worker = Worker} = State) ->
     {reply, {ok, #{miner => Miner, worker => Worker}}, State}.
 
-handle_cast({generate, Job, ExtraNonce, MinerNonce}, State) ->
-    Action = abort_running_worker(Job),
-    {noreply, handle_generate(Action, Job, ExtraNonce, MinerNonce, State)}.
+handle_cast(_Req, State) ->
+    {noreply, State}.
 
 handle_info({worker_reply, Reply}, State) ->
     {noreply, handle_reply(Reply, State)};
@@ -149,7 +154,7 @@ handle_info({'DOWN', Ref, process, _Pid, Rsn}, State) ->
 
 terminate(_Rsn, #state{miner = Miner}) ->
     MinerId = aestratum_client_miner:id(Miner),
-    aestratum_client_generator_register:del(MinerId),
+    aestratum_client_generator_manager:del(MinerId),
     ok.
 
 %% Internal functions.
@@ -157,15 +162,19 @@ terminate(_Rsn, #state{miner = Miner}) ->
 handle_generate(abort, Job, ExtraNonce, MinerNonce,
                 #state{miner = Miner, worker = #worker{} = Worker} = State) ->
     kill_worker(Worker),
-    Worker1 = spawn_worker(Miner, Job, ExtraNonce, MinerNonce, 30000),
-    State#state{worker = Worker1};
+    {Worker1, MinerNonceRange} =
+        spawn_worker(Miner, Job, ExtraNonce, MinerNonce, 30000),
+    {ok, {started, MinerNonceRange}, State#state{worker = Worker1}};
 handle_generate(_Action, Job, ExtraNonce, MinerNonce,
                 #state{miner = Miner, worker = undefined} = State) ->
-    Worker1 = spawn_worker(Miner, Job, ExtraNonce, MinerNonce, 30000),
-    State#state{worker = Worker1};
-handle_generate(keep, _Job, _MinerNonce, _ExtraNonce,
-                #state{worker = #worker{}} = State) ->
-    State.
+    {Worker1, MinerNonceRange} =
+        spawn_worker(Miner, Job, ExtraNonce, MinerNonce, 30000),
+    {ok, {started, MinerNonceRange}, State#state{worker = Worker1}};
+handle_generate(keep, _Job, _ExtraNonce, MinerNonce,
+                #state{miner = Miner, worker = #worker{}} = State) ->
+    Config = aestratum_client_miner:config(Miner),
+    Repeats = aestratum_miner:repeats(Config),
+    {ok, {queued, miner_nonce_range(MinerNonce, Repeats)}, State}.
 
 handle_reply(Reply, #state{worker = #worker{monitor = Monitor,
                                             timer = Timer}} = State) ->
@@ -195,10 +204,11 @@ spawn_worker(Miner, #{job_id := JobId, block_hash := BlockHash,
         spawn_monitor(?MODULE, worker_process,
                       [self(), BlockHash, BlockVersion, Target, Nonce,
                        Instance, Config]),
-    #worker{pid = Pid, job_id = JobId, block_hash = BlockHash,
-            block_version = BlockVersion, target = Target,
-            extra_nonce = ExtraNonce, miner_nonce = MinerNonce,
-            monitor = Monitor, timer = set_timer(Timeout)}.
+    {#worker{pid = Pid, job_id = JobId, block_hash = BlockHash,
+             block_version = BlockVersion, target = Target,
+             extra_nonce = ExtraNonce, miner_nonce = MinerNonce,
+             monitor = Monitor, timer = set_timer(Timeout)},
+     miner_nonce_range(MinerNonce, aestratum_miner:repeats(Config))}.
 
 worker_process(Parent, BlockHash, BlockVersion, Target, Nonce, Instance, Config) ->
     case aestratum_miner:generate(BlockHash, BlockVersion, Target, Nonce,
@@ -213,6 +223,10 @@ worker_process(Parent, BlockHash, BlockVersion, Target, Nonce, Instance, Config)
 
 make_worker_reply(Parent, Reply) ->
     Parent ! {worker_reply, Reply}.
+
+miner_nonce_range(MinerNonce, Repeats) ->
+    MinerNonceValue = aestratum_nonce:value(MinerNonce),
+    {MinerNonceValue, MinerNonceValue + Repeats - 1}.
 
 kill_worker(#worker{pid = Pid, monitor = Monitor, timer = Timer}) ->
     cancel_monitor(Monitor),

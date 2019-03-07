@@ -6,15 +6,16 @@
 -define(NONCE_MODULE, aestratum_nonce).
 -define(MINER_MODULE, aestratum_miner).
 -define(CLIENT_MINER_MODULE, aestratum_client_miner).
--define(CLIENT_GENERATOR_REGISTER_MODULE, aestratum_client_generator_register).
+-define(CLIENT_GENERATOR_MANAGER_MODULE, aestratum_client_generator_manager).
 -define(DUMMY_SUBSCRIBER_MODULE, aestratum_dummy_subscriber).
 -define(CLIENT_HANDLER_MODULE, aestratum_client_handler).
 
 -define(TEST_MINER_ID, 0).
 -define(TEST_MINER_INSTANCE, undefined).
+-define(TEST_MINER_REPEATS, 5).
 -define(TEST_MINER_CONFIG,
         ?MINER_MODULE:config(<<"mean29-generic">>, <<"aecuckoo">>, <<>>,
-                             false, 5, 29, undefined)).
+                             false, ?TEST_MINER_REPEATS, 29, undefined)).
 -define(TEST_JOB_ID1, <<"0102030405060708">>).
 -define(TEST_JOB_ID2, <<"0a0b0c0d0e0fffff">>).
 -define(TEST_TARGET1, 16#ff0000000000000000000000000000000000000000000000000000000).
@@ -32,17 +33,17 @@ client_generator_worker_test_() ->
     {foreach,
      fun() ->
              meck:new(?MINER_MODULE, [passthrough]),
-             meck:new(?CLIENT_GENERATOR_REGISTER_MODULE, [passthrough]),
-             meck:expect(?CLIENT_GENERATOR_REGISTER_MODULE, add, fun(_, _) -> ok end),
+             meck:new(?CLIENT_GENERATOR_MANAGER_MODULE, [passthrough]),
+             meck:expect(?CLIENT_GENERATOR_MANAGER_MODULE, add, fun(_, _) -> ok end),
              {ok, _} = ?DUMMY_SUBSCRIBER_MODULE:start_link(?CLIENT_HANDLER_MODULE),
              {ok, Pid} = ?TEST_MODULE:start_link(config()),
              Pid
      end,
      fun(Pid) ->
-             meck:expect(?CLIENT_GENERATOR_REGISTER_MODULE, del, fun(_) -> ok end),
+             meck:expect(?CLIENT_GENERATOR_MANAGER_MODULE, del, fun(_) -> ok end),
              ok = ?TEST_MODULE:stop(Pid),
              ok = ?DUMMY_SUBSCRIBER_MODULE:stop(?CLIENT_HANDLER_MODULE),
-             meck:unload(?CLIENT_GENERATOR_REGISTER_MODULE),
+             meck:unload(?CLIENT_GENERATOR_MANAGER_MODULE),
              meck:unload(?MINER_MODULE)
      end,
      [{with, [fun init/1]},
@@ -74,16 +75,15 @@ generate_when_no_worker_abort_worker_keep_mining(Pid) ->
     Job = #{job_id => ?TEST_JOB_ID1, block_hash => ?TEST_BLOCK_HASH1,
             block_version => 1, target => ?TEST_TARGET1, empty_queue => true},
     ExtraNonce = ?NONCE_MODULE:new(extra, 16#ffffffff, 4),
-    MinerNonce = ?NONCE_MODULE:new(miner, 0, 4),
+    MinerNonce = ?NONCE_MODULE:new(miner, 10, 4),
 
     mock_generate(keep_mining),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                  ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(?TEST_JOB_ID1, ?TEST_MODULE:job_id(Worker)),
     ?assertEqual(?TEST_BLOCK_HASH1, ?TEST_MODULE:block_hash(Worker)),
@@ -101,13 +101,12 @@ generate_when_no_worker_abort_worker_no_solution(Pid) ->
     MinerNonce = ?NONCE_MODULE:new(miner, 0, 4),
 
     mock_generate(return_no_solution),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -120,13 +119,12 @@ generate_when_no_worker_abort_worker_runtime_error(Pid) ->
     MinerNonce = ?NONCE_MODULE:new(miner, 0, 4),
 
     mock_generate(return_runtime_error),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -140,13 +138,12 @@ generate_when_no_worker_abort_worker_valid_solution(Pid) ->
 
     {MinerNonce1, Solution} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -162,13 +159,12 @@ generate_when_no_worker_keep_worker_keep_mining(Pid) ->
     MinerNonce = ?NONCE_MODULE:new(miner, 0, 5),
 
     mock_generate(keep_mining),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(?TEST_JOB_ID1, ?TEST_MODULE:job_id(Worker)),
     ?assertEqual(?TEST_BLOCK_HASH1, ?TEST_MODULE:block_hash(Worker)),
@@ -186,13 +182,12 @@ generate_when_no_worker_keep_worker_no_solution(Pid) ->
     MinerNonce = ?NONCE_MODULE:new(miner, 0, 4),
 
     mock_generate(return_no_solution),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -205,13 +200,12 @@ generate_when_no_worker_keep_worker_runtime_error(Pid) ->
     MinerNonce = ?NONCE_MODULE:new(miner, 0, 4),
 
     mock_generate(return_runtime_error),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -225,13 +219,12 @@ generate_when_no_worker_keep_worker_valid_solution(Pid) ->
 
     {MinerNonce1, Solution} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -252,13 +245,12 @@ generate_when_worker_abort_worker_keep_mining(Pid) ->
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
     mock_generate(keep_mining),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(?TEST_JOB_ID2, ?TEST_MODULE:job_id(Worker)),
     ?assertEqual(?TEST_BLOCK_HASH2, ?TEST_MODULE:block_hash(Worker)),
@@ -281,13 +273,12 @@ generate_when_worker_abort_worker_no_solution(Pid) ->
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
     mock_generate(return_no_solution),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -305,13 +296,12 @@ generate_when_worker_abort_worker_runtime_error(Pid) ->
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
     mock_generate(return_runtime_error),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -330,13 +320,12 @@ generate_when_worker_abort_worker_valid_solution(Pid) ->
 
     {MinerNonce3, Solution} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce2),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({started, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(undefined, Worker),
 
@@ -357,13 +346,12 @@ generate_when_worker_keep_worker_keep_mining(Pid) ->
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
     mock_generate(keep_mining),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({queued, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(?TEST_JOB_ID1, ?TEST_MODULE:job_id(Worker)),
     ?assertEqual(?TEST_BLOCK_HASH1, ?TEST_MODULE:block_hash(Worker)),
@@ -386,13 +374,12 @@ generate_when_worker_keep_worker_no_solution(Pid) ->
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
     mock_generate(return_no_solution),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({queued, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(?TEST_JOB_ID1, ?TEST_MODULE:job_id(Worker)),
     ?assertEqual(?TEST_BLOCK_HASH1, ?TEST_MODULE:block_hash(Worker)),
@@ -415,13 +402,12 @@ generate_when_worker_keep_worker_runtime_error(Pid) ->
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
     mock_generate(return_runtime_error),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({queued, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(?TEST_JOB_ID1, ?TEST_MODULE:job_id(Worker)),
     ?assertEqual(?TEST_BLOCK_HASH1, ?TEST_MODULE:block_hash(Worker)),
@@ -445,13 +431,12 @@ generate_when_worker_keep_worker_valid_solution(Pid) ->
 
     {_MinerNonce3, _Solution} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce2),
-    ?assertEqual(ok, ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
+    ?assertEqual({queued, miner_nonce_range(MinerNonce2, ?TEST_MINER_REPEATS)},
+                 ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
     timer:sleep(100),
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
 
-    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
-    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
-    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)),
+    check_miner(Miner),
 
     ?assertEqual(?TEST_JOB_ID1, ?TEST_MODULE:job_id(Worker)),
     ?assertEqual(?TEST_BLOCK_HASH1, ?TEST_MODULE:block_hash(Worker)),
@@ -462,11 +447,20 @@ generate_when_worker_keep_worker_valid_solution(Pid) ->
 
     ?assertEqual({ok, []}, ?DUMMY_SUBSCRIBER_MODULE:events(?CLIENT_HANDLER_MODULE)).
 
+check_miner(Miner) ->
+    ?assertEqual(?TEST_MINER_ID, ?CLIENT_MINER_MODULE:id(Miner)),
+    ?assertEqual(?TEST_MINER_INSTANCE, ?CLIENT_MINER_MODULE:instance(Miner)),
+    ?assertEqual(?TEST_MINER_CONFIG, ?CLIENT_MINER_MODULE:config(Miner)).
+
 prep_mininig_worker(Pid, Job, ExtraNonce, MinerNonce) ->
     mock_generate(keep_mining),
-    ok = ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce),
+    {started, _} = ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce),
     timer:sleep(100),
     ok.
+
+miner_nonce_range(MinerNonce, Repeats) ->
+    MinerNonceValue = aestratum_nonce:value(MinerNonce),
+    {MinerNonceValue, MinerNonceValue + Repeats - 1}.
 
 mock_generate(keep_mining) ->
     meck:expect(?MINER_MODULE, generate,
