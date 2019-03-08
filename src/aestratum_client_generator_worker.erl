@@ -49,6 +49,8 @@
 
 -type miner_nonce()     :: aestratum_nonce:part_nonce().
 
+-type repeats()         :: aestratum_miner:repeats().
+
 -type monitor()         :: reference().
 
 -type timer()           :: reference().
@@ -90,7 +92,8 @@ start_link(Miner) ->
 stop(Pid) ->
     gen_server:stop(Pid).
 
--spec generate(pid(), job(), extra_nonce(), miner_nonce()) -> ok.
+-spec generate(pid(), job(), extra_nonce(), miner_nonce()) ->
+    {started | queued, repeats()}.
 generate(Pid, Job, ExtraNonce, MinerNonce) ->
     gen_server:call(Pid, {generate, Job, ExtraNonce, MinerNonce}).
 
