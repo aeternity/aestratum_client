@@ -173,7 +173,7 @@ handle_generate(_Action, Job, ExtraNonce, MinerNonce,
                 #state{miner = Miner, worker = undefined} = State) ->
     {Worker1, Repeats} = spawn_worker(Miner, Job, ExtraNonce, MinerNonce, 30000),
     {ok, {started, Repeats}, State#state{worker = Worker1}};
-handle_generate(keep, _Job, _ExtraNonce, MinerNonce,
+handle_generate(keep, _Job, _ExtraNonce, _MinerNonce,
                 #state{miner = Miner, worker = #worker{}} = State) ->
     Config = aestratum_client_miner:config(Miner),
     {ok, {queued, aestratum_miner:repeats(Config)}, State}.
