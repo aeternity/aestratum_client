@@ -72,7 +72,8 @@ client_generator_worker_test_() ->
       {with, [fun generate_when_worker_keep_worker_keep_mining/1]},
       {with, [fun generate_when_worker_keep_worker_no_solution/1]},
       {with, [fun generate_when_worker_keep_worker_runtime_error/1]},
-      {with, [fun generate_when_worker_keep_worker_valid_solution/1]}]}.
+      {with, [fun generate_when_worker_keep_worker_valid_solution/1]},
+      {with, [fun worker_timeout/1]}]}.
 
 init(Pid) ->
     {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
@@ -359,6 +360,20 @@ generate_when_worker_keep_worker_valid_solution(Pid) ->
 
     check_miner(Miner),
     check_worker(Worker, Job1, ExtraNonce, MinerNonce1),
+    check_event(undefined).
+
+worker_timeout(Pid) ->
+    Job1 = ?TEST_JOB1(true),
+    MinerNonce1 = ?NONCE_MODULE:new(miner, 1, 1),
+    ExtraNonce = ?NONCE_MODULE:new(extra, 16#11223344556677, 7),
+    prep_mininig_worker(Pid, Job1, ExtraNonce, MinerNonce1),
+
+    Pid ! worker_timeout,
+    timer:sleep(100),
+    {ok, #{miner := Miner, worker := Worker}} = ?TEST_MODULE:status(Pid),
+
+    check_miner(Miner),
+    check_worker(Worker, undefined),
     check_event(undefined).
 
 check_miner(Miner) ->
