@@ -104,11 +104,16 @@ t(Pid, Data) ->
     lists:filter(fun({_T, _Assert}) -> true;
                     (no_test) -> false end, Asserts).
 
-event({conn, D}) when is_map(D) ->
-    {ok, D1} = ?JSONRPC_MODULE:encode(D),
-    {conn, D1};
-event(Other) ->
-    Other.
+event({conn, D}) ->
+    case maps:get(event, D, undefined) of
+        E when E =/= undefined ->
+            %% Map has event key, so it's an event already.
+            {conn, D};
+        undefined ->
+            %% Map doesn't have event key, so it's a message that needs encoding.
+            {ok, D1} = ?JSONRPC_MODULE:encode(D),
+            {conn, #{event => recv_data, data => D1}}
+    end.
 
 result(Pid, {_A, S}, {A1, S1}) ->
     Ks = maps:keys(S),
@@ -139,7 +144,7 @@ maybe_rsp_result(_D, D1M0) ->
 
 init() ->
     T = <<"init - client">>,
-    L = [{{conn, init},
+    L = [{{conn, #{event => init}},
           {send,
            #{type => req, method => configure, id => 0},
            #{phase => connected, reqs => #{0 => connected}}}
@@ -149,7 +154,7 @@ init() ->
 when_connected(timeout_0_retries) ->
     application:set_env(aestratum, max_retries, 0),
     T = <<"when connected - timeout, 0 retries">>,
-    L = [{{conn, {timeout, 0, connected}},
+    L = [{{conn, #{event => timeout, id => 0, phase => connected}},
           {stop,
            #{phase => disconnected, reqs => #{}}}
          }],
@@ -157,12 +162,12 @@ when_connected(timeout_0_retries) ->
 when_connected(timeout_1_retries) ->
     application:set_env(aestratum, max_retries, 1),
     T = <<"when connected - timeout, 1 retries">>,
-    L = [{{conn, {timeout, 0, connected}},
+    L = [{{conn, #{event => timeout, id => 0, phase => connected}},
           {send,
            #{type => req, method => configure},
            #{phase => connected, reqs => #{1 => connected}}}
          },
-         {{conn, {timeout, 1, connected}},
+         {{conn, #{event => timeout, id => 1, phase => connected}},
           {stop,
            #{phase => disconnected, reqs => #{}}}
          }],
@@ -225,12 +230,12 @@ when_connected(configure_rsp) ->
 when_configured(timeout) ->
     application:set_env(aestratum, max_retries, 1),
     T = <<"when configured - timeout">>,
-    L = [{{conn, {timeout, 1, configured}},
+    L = [{{conn, #{event => timeout, id => 1, phase => configured}},
           {send,
            #{type => req, method => subscribe, id => 2},
            #{phase => configured, reqs => #{2 => configured}}}
          },
-         {{conn, {timeout, 2, configured}},
+         {{conn, #{event => timeout, id => 2, phase => configured}},
           {stop,
            #{phase => disconnected, reqs => #{}}}
          }],
@@ -296,12 +301,12 @@ when_configured(subscribe_rsp) ->
 
 when_subscribed(timeout) ->
     T = <<"when subscribed - timeout">>,
-    L = [{{conn, {timeout, 2, subscribed}},
+    L = [{{conn, #{event => timeout, id => 2, phase => subscribed}},
           {send,
            #{type => req, method => authorize, id => 3},
            #{phase => subscribed, reqs => #{3 => subscribed}}}
          },
-         {{conn, {timeout, 3, subscribed}},
+         {{conn, #{event => timeout, id => 3, phase => subscribed}},
           {stop,
            #{phase => disconnected, reqs => #{}}}
          }],
@@ -370,7 +375,7 @@ when_subscribed(authorize_success_rsp) ->
 
 when_authorized(timeout) ->
     T = <<"when authorized - timeout">>,
-    L = [{{conn, {timeout, 10, subscribed}},
+    L = [{{conn, #{event => timeout, id => 10, phase => subscribed}},
         {no_send,
          #{phase => authorized, reqs => #{}}}
        }],
@@ -417,7 +422,7 @@ prep_authorized(T) ->
 %% Configure request with Id 0 is sent.
 %% Session state stays in connected phase, req with Id 0 has connected phase.
 conn_init() ->
-    {{conn, init},
+    {{conn, #{event => init}},
      {send,
       #{type => req, method => configure, id => 0},
       #{phase => connected, reqs => #{0 => connected}}}
@@ -447,25 +452,29 @@ conn_authorize() ->
     }.
 
 conn_make_parse_error(Phase, Reqs) ->
-    {{conn, <<"some random binary">>},
+    {{conn, #{event => recv_data,
+              data => <<"some random binary">>}},
      {stop,
       #{phase => Phase, reqs => Reqs}}
     }.
 
 conn_make_invalid_msg(Phase, Reqs) ->
-    {{conn, <<"{\"jsonrpc\":\"2.0\",\"id\":\"none\"}">>},
+    {{conn, #{event => recv_data,
+              data => <<"{\"jsonrpc\":\"2.0\",\"id\":\"none\"}">>}},
      {stop,
       #{phase => Phase, reqs => Reqs}}
     }.
 
 conn_make_invalid_method(Phase, Reqs) ->
-    {{conn, <<"{\"jsonrpc\":\"2.0\",\"id\":200,\"method\":\"foo\",\"params\":[]}">>},
+    {{conn, #{event => recv_data,
+              data => <<"{\"jsonrpc\":\"2.0\",\"id\":200,\"method\":\"foo\",\"params\":[]}">>}},
      {stop,
       #{phase => Phase, reqs => Reqs}}
     }.
 
 conn_make_invalid_param(Phase, Reqs) ->
-    {{conn, <<"{\"jsonrpc\":\"2.0\",\"id\":300,\"error\":[\"some invalid error\"}">>},
+    {{conn, #{event => recv_data,
+              data => <<"{\"jsonrpc\":\"2.0\",\"id\":300,\"error\":[\"some invalid error\"}">>}},
      {stop,
       #{phase => Phase, reqs => Reqs}}
     }.

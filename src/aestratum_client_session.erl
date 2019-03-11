@@ -41,17 +41,17 @@ close(State) ->
 
 %% Internal functions.
 
-handle_conn_event(init, #state{phase = connected} = State) ->
+handle_conn_event(#{event := init}, #state{phase = connected} = State) ->
     send_req(configure, State);
-handle_conn_event(RawMsg, State) when is_binary(RawMsg) ->
+handle_conn_event(#{event := recv_data, data := RawMsg}, State) ->
     case aestratum_jsonrpc:decode(RawMsg) of
         {ok, Msg}    -> recv_msg(Msg, State);
         {error, Rsn} -> recv_msg_error(Rsn, State)
     end;
 %% TODO: {reconnect, Host, Port, WaitTime},...
-handle_conn_event({timeout, Id, Phase}, State) ->
+handle_conn_event(#{event := timeout, id := Id, phase := Phase}, State) ->
     handle_conn_timeout(Id, Phase, State);
-handle_conn_event(close, State) ->
+handle_conn_event(#{event := close}, State) ->
     %% TODO: reason, log
     {stop, close_session(State)}.
 
@@ -223,7 +223,8 @@ close_session(#state{reqs = Reqs} = State) ->
     State#state{phase = disconnected, reqs = clean_reqs(Reqs)}.
 
 add_req(Id, Phase, Req, Reqs) ->
-    TRef = erlang:send_after(?MSG_TIMEOUT, self(), {timeout, Id, Phase}),
+    TimeoutEvent = #{event => timeout, id => Id, phase => Phase},
+    TRef = erlang:send_after(?MSG_TIMEOUT, self(), {conn, TimeoutEvent}),
     maps:put(Id, {TRef, Phase, Req}, Reqs).
 
 find_req(Id, Reqs) ->

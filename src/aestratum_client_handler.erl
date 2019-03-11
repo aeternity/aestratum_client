@@ -55,7 +55,8 @@ handle_call(_Request, _From, State) ->
 handle_cast({init_session, SessionOpts}, #state{socket = Socket} = State) when
       Socket =/= undefined ->
     Session = aestratum_client_session:new(SessionOpts),
-    Res = aestratum_client_session:handle_event({conn, init}, Session),
+    Event = #{event => init},
+    Res = aestratum_client_session:handle_event({conn, Event}, Session),
     result(Res, State);
 handle_cast({init_session, _SessionOpts}, State) ->
     {noreply, State}.
@@ -66,8 +67,8 @@ handle_info({SocketClose, _Socket}, State) when ?IS_CLOSE(SocketClose) ->
 	handle_socket_close(State);
 handle_info({SocketError, _Socket, Rsn}, State) when ?IS_ERROR(SocketError) ->
     handle_socket_error(Rsn, State);
-handle_info(timeout, State) ->
-    handle_socket_timeout(State);
+handle_info({conn, Event}, State) ->
+    handle_conn_event(Event, State);
 %% TODO
 handle_info({miner, Event}, State) ->
     handle_miner_event(Event, State);
@@ -83,7 +84,8 @@ terminate(_Rsn, _State) ->
 
 handle_socket_data(Data, #state{socket = Socket, transport = Transport,
                                 session = Session} = State) ->
-	Res = aestratum_client_session:handle_event({conn, Data}, Session),
+    Event = #{event => recv_data, data => Data},
+	Res = aestratum_client_session:handle_event({conn, Event}, Session),
 	case is_stop(Res) of
 	    true  -> ok;
 	    false -> Transport:setopts(Socket, [{active, once}])
@@ -91,20 +93,22 @@ handle_socket_data(Data, #state{socket = Socket, transport = Transport,
     result(Res, State).
 
 handle_socket_close(#state{session = Session} = State) ->
-    Res = aestratum_client_session:handle_event({conn, close}, Session),
+    Event = #{event => close},
+    Res = aestratum_client_session:handle_event({conn, Event}, Session),
     result(Res, State).
 
 handle_socket_error(_Rsn, #state{session = Session} = State) ->
     %% TODO: log error
-    Res = aestratum_client_session:handle_event({conn, close}, Session),
+    Event = #{event => close},
+    Res = aestratum_client_session:handle_event({conn, Event}, Session),
     result(Res, State).
 
-handle_socket_timeout(#state{session = Session} = State) ->
-    Res = aestratum_client_session:handle_event({conn, timeout}, Session),
+handle_conn_event({conn, Event}, #state{session = Session} = State) ->
+    Res = aestratum_client_session:handle_event({conn, Event}, Session),
     result(Res, State).
 
-handle_miner_event(Event, #state{session = Session} = State) ->
-    Res = aestratum_client_session:handle_event({chain, Event}, Session),
+handle_miner_event({miner, Event}, #state{session = Session} = State) ->
+    Res = aestratum_client_session:handle_event({miner, Event}, Session),
     result(Res, State).
 
 result({send, Data, Session},
@@ -113,7 +117,8 @@ result({send, Data, Session},
         ok ->
             {noreply, State#state{session = Session}};
         {error, _Rsn} ->
-            Res = aestratum_client_session:handle_event({conn, close}, Session),
+            Event = #{event => close},
+            Res = aestratum_client_session:handle_event({conn, Event}, Session),
             result(Res, State)
     end;
 result({no_send, Session}, State) ->
