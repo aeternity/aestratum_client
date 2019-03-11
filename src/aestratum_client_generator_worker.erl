@@ -37,13 +37,13 @@
 
 -type job_id()          :: <<_:(16 * 8)>>.
 
--type block_hash()      :: aestratum_miner:hash().
+-type block_hash()      :: aestratum_miner:block_hash().
 
--type block_version()   :: aestratum_miner:version().
+-type block_version()   :: aestratum_miner:block_version().
 
 -type empty_queue()     :: boolean().
 
-%%-type target()          :: aestratum_miner:target().  TODO
+-type target()          :: aestratum_miner:target().
 
 -type extra_nonce()     :: aestratum_nonce:part_nonce().
 
@@ -58,7 +58,7 @@
 -type job()             :: #{job_id        => job_id(),
                              block_hash    => block_hash(),
                              block_version => block_version(),
-                             target        => term(),         %% TODO
+                             target        => target(),
                              empty_queue   => empty_queue()}.
 
 -record(worker, {
@@ -66,7 +66,7 @@
           job_id        :: job_id(),
           block_hash    :: block_hash(),
           block_version :: block_version(),
-          target        :: term(), %% TODO
+          target        :: target(),
           extra_nonce   :: extra_nonce(),
           miner_nonce   :: miner_nonce(),
           monitor       :: monitor(),
@@ -113,7 +113,7 @@ block_hash(#worker{block_hash = BlockHash}) ->
 block_version(#worker{block_version = BlockVersion}) ->
     BlockVersion.
 
--spec target(worker()) -> term(). %% TODO
+-spec target(worker()) -> target().
 target(#worker{target = Target}) ->
     Target.
 
