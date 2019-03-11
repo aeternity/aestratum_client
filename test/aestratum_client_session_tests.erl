@@ -25,7 +25,12 @@ session_test_() ->
 client_session() ->
     {foreach,
      fun() ->
-             {ok, Pid} = aestratum_dummy_handler:start_link(?TEST_MODULE),
+             SessionOpts =
+                #{host => <<"pool.aeternity.com">>,
+                  port => 9999,
+                  user => <<"ak_DummyPubKeyDoNotEverUse999999999999999999999999999">>,
+                  password => null},
+             {ok, Pid} = aestratum_dummy_handler:start_link(?TEST_MODULE, SessionOpts),
              Pid
      end,
      fun(Pid) ->

@@ -16,17 +16,15 @@
          terminate/2
         ]).
 
+-type config() :: aestratum_client_config:config().
+
 -record(state, {
           socket,
           transport,
-          module,
           session
          }).
 
 -define(SERVER, ?MODULE).
-
--define(DEFAULT_TRANSPORT, tcp).
--define(DEFAULT_SOCKET_OPTS, []).
 
 -define(IS_MSG(T), ((T =:= tcp) or (T =:= ssl))).
 -define(IS_CLOSE(C), ((C =:= tcp_closed) or (C =:= ssl_closed))).
@@ -34,32 +32,33 @@
 
 %% API.
 
-start_link(Opts) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, Opts, []).
+-spec start_link(config()) -> {ok, pid()}.
+start_link(Config) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, Config, []).
 
 %% gen_server callbacks.
 
-init([Opts]) ->
-    Transport = maps:get(transport, Opts, ?DEFAULT_TRANSPORT),
-    Host = maps:get(host, Opts),
-    Port = maps:get(port, Opts),
-    SocketOpts = maps:get(socket_opts, Opts, ?DEFAULT_SOCKET_OPTS),
-    {ok, Socket} = Transport:connect(Host, Port, SocketOpts),
-    ok = Transport:setopts(Socket, [{active, once}, {packet, line},
-                                    {keepalive, true}] ++ SocketOpts),
-    Mod = maps:get(module, Opts),
-    gen_server:cast(self(), init_session),
-    {ok, #state{socket = Socket, transport = Transport, module = Mod}}.
-
+init(#{conn := ConnConfig, user := UserConfig}) ->
+    Transport = transport(maps:get(transport, ConnConfig)),
+    Host = maps:get(host, ConnConfig),
+    Port = maps:get(port, ConnConfig),
+    SocketOpts = maps:get(socket_opts, ConnConfig),
+    Socket = connect(Transport, Host, Port, SocketOpts),
+    set_socket_opts(Socket, [{active, once}, {packet, line}, {keepalive, true}]),
+    SessionOpts = UserConfig#{host => Host, port => Port},
+    gen_server:cast(self(), {init_session, SessionOpts}),
+    {ok, #state{socket = Socket, transport = Transport}}.
 
 handle_call(_Request, _From, State) ->
 	{reply, ok, State}.
 
-handle_cast(init_session, #state{module = Mod} = State) ->
-    %% TODO: subscribe to miner events
-    Session = Mod:new(),
-    Res = Mod:handle_event({conn, init}, Session),
-    result(Res, State).
+handle_cast({init_session, SessionOpts}, #state{socket = Socket} = State) when
+      Socket =/= undefined ->
+    Session = aestratum_client_session:new(SessionOpts),
+    Res = aestratum_client_session:handle_event({conn, init}, Session),
+    result(Res, State);
+handle_cast({init_session, _SessionOpts}, State) ->
+    {noreply, State}.
 
 handle_info({SocketType, _Socket, Data}, State) when ?IS_MSG(SocketType) ->
     handle_socket_data(Data, State);
@@ -75,44 +74,46 @@ handle_info({miner, Event}, State) ->
 handle_info(_Info, State) ->
 	{stop, normal, State}.
 
-terminate(_Reason, #state{module = Mod, session = Session}) ->
-    Mod:close(Session).
+terminate(_Rsn, #state{session = Session}) when Session =/= undefined ->
+    aestratum_client_session:close(Session);
+terminate(_Rsn, _State) ->
+    ok.
 
 %% Internal functions.
 
 handle_socket_data(Data, #state{socket = Socket, transport = Transport,
-                                module = Mod, session = Session} = State) ->
-	Res = Mod:handle_event({conn, Data}, Session),
+                                session = Session} = State) ->
+	Res = aestratum_client_session:handle_event({conn, Data}, Session),
 	case is_stop(Res) of
-	    true -> ok;
+	    true  -> ok;
 	    false -> Transport:setopts(Socket, [{active, once}])
     end,
     result(Res, State).
 
-handle_socket_close(#state{module = Mod, session = Session} = State) ->
-    Res = Mod:handle_event({conn, close}, Session),
+handle_socket_close(#state{session = Session} = State) ->
+    Res = aestratum_client_session:handle_event({conn, close}, Session),
     result(Res, State).
 
-handle_socket_error(_Rsn, #state{module = Mod, session = Session} = State) ->
+handle_socket_error(_Rsn, #state{session = Session} = State) ->
     %% TODO: log error
-    Res = Mod:handle_event({conn, close}, Session),
+    Res = aestratum_client_session:handle_event({conn, close}, Session),
     result(Res, State).
 
-handle_socket_timeout(#state{module = Mod, session = Session} = State) ->
-    Res = Mod:handle_event({conn, timeout}, Session),
+handle_socket_timeout(#state{session = Session} = State) ->
+    Res = aestratum_client_session:handle_event({conn, timeout}, Session),
     result(Res, State).
 
-handle_miner_event(Event, #state{module = Mod, session = Session} = State) ->
-    Res = Mod:handle_event({chain, Event}, Session),
+handle_miner_event(Event, #state{session = Session} = State) ->
+    Res = aestratum_client_session:handle_event({chain, Event}, Session),
     result(Res, State).
 
-result({send, Data, #state{module = Mod} = Session},
+result({send, Data, Session},
        #state{socket = Socket, transport = Transport} = State) ->
     case send_data(Data, Socket, Transport) of
         ok ->
             {noreply, State#state{session = Session}};
         {error, _Rsn} ->
-            Res = Mod:handle_event({conn, close}, Session),
+            Res = aestratum_client_session:handle_event({conn, close}, Session),
             result(Res, State)
     end;
 result({no_send, Session}, State) ->
@@ -125,4 +126,18 @@ send_data(Data, Socket, Transport) ->
 
 is_stop({stop, _Session}) -> true;
 is_stop(_Other) -> false.
+
+transport(tcp) -> gen_tcp;
+transport(ssl) -> ssl.
+
+connect(Transport, Host, Port, Opts) ->
+    case Transport:connect(binary_to_list(Host), Port, Opts) of
+        {ok, Socket} -> Socket;
+        _Other       -> undefined
+    end.
+
+set_socket_opts(Socket, Opts) when Socket =/= undefined ->
+    inet:setops(Socket, Opts);
+set_socket_opts(_Socket, _Opts) ->
+    ok.
 

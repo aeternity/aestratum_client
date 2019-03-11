@@ -1,6 +1,6 @@
 -module(aestratum_client_session).
 
--export([new/0,
+-export([new/1,
          handle_event/2,
          close/1
         ]).
@@ -14,17 +14,21 @@
           req_id = 0,
           reqs = maps:new(),   %% cache of sent requests
           retries = 0,
+          host,
+          port,
+          user,
           extra_nonce,
           target
         }).
 
+-define(USER_AGENT, <<"aeclient/1.0.0">>). %% TODO: get version programatically
 -define(MAX_RETRIES, application:get_env(aestratum, max_retries, 3)).
 -define(MSG_TIMEOUT, application:get_env(aestratum, timeout, 30000)).
 
 %% API.
 
-new() ->
-    #state{phase = connected}.
+new(#{host := Host, port := Port, user := User, password := null}) ->
+    #state{phase = connected, host = Host, port = Port, user = User}.
 
 handle_event({conn, What}, State)  ->
     handle_conn_event(What, State);
@@ -185,19 +189,16 @@ send_configure_req(#state{req_id = Id, reqs = Reqs} = State) ->
      State#state{req_id = next_id(Id),
                  reqs = add_req(Id, connected, ReqMap, Reqs)}}.
 
-send_subscribe_req(#state{req_id = Id, reqs = Reqs} = State) ->
-    UserAgent = <<"ae/0.0.1">>,
-    Host = <<"localhost">>,
-    Port = 9999,
+send_subscribe_req(#state{req_id = Id, reqs = Reqs,
+                          host = Host, port = Port} = State) ->
     ReqMap = #{type => req, method => subscribe, id => Id,
-               user_agent => UserAgent, session_id => null, host => Host,
+               user_agent => ?USER_AGENT, session_id => null, host => Host,
                port => Port},
     {send, encode(ReqMap),
      State#state{req_id = next_id(Id),
                  reqs = add_req(Id, configured, ReqMap, Reqs)}}.
 
-send_authorize_req(#state{req_id = Id, reqs = Reqs} = State) ->
-    User = <<"ak_542o93BKHiANzqNaFj6UurrJuDuxU61zCGr9LJCwtTUg34kWt">>,
+send_authorize_req(#state{req_id = Id, reqs = Reqs, user = User} = State) ->
     ReqMap = #{type => req, method => authorize, id => Id,
                user => User, password => null},
     {send, encode(ReqMap),
