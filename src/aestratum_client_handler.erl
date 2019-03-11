@@ -142,7 +142,7 @@ connect(Transport, Host, Port, Opts) ->
     end.
 
 set_socket_opts(Socket, Opts) when Socket =/= undefined ->
-    inet:setops(Socket, Opts);
+    inet:setopts(Socket, Opts);
 set_socket_opts(_Socket, _Opts) ->
     ok.
 
