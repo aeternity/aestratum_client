@@ -215,7 +215,7 @@ spawn_worker(Miner, #{job_id := JobId, block_hash := BlockHash,
 worker_process(Parent, BlockHash, BlockVersion, Target, Nonce, Instance, Config) ->
     case aestratum_miner:generate(BlockHash, BlockVersion, Target, Nonce,
                                   Instance, Config) of
-        {ok, {_Nonce, _Solution} = Reply} ->
+        {ok, {_Nonce, _Pow} = Reply} ->
             make_worker_reply(Parent, Reply);
         {error, no_solution = Reply} ->
             make_worker_reply(Parent, Reply);
@@ -239,19 +239,19 @@ flush_worker_reply() ->
 abort_running_worker(#{empty_queue := true})  -> abort;
 abort_running_worker(#{empty_queue := false}) -> keep.
 
-maybe_notify({Nonce, Solution}, State) ->
-    notify({Nonce, Solution}, State);
+maybe_notify({Nonce, Pow}, State) ->
+    notify(Nonce, Pow, State);
 maybe_notify(_Other, _State) ->
     ok.
 
-notify({Nonce, Solution},
+notify(Nonce, Pow,
        #state{worker = #worker{job_id = JobId, extra_nonce = ExtraNonce}}) ->
     Nonce1 = aestratum_nonce:new(Nonce),
     ExtraNonceNBytes = aestratum_nonce:nbytes(ExtraNonce),
     {ExtraNonce, MinerNonce} =
         aestratum_nonce:split({extra, ExtraNonceNBytes}, Nonce1),
-    ?CLIENT_HANDLER ! {miner, #{job_id => JobId, miner_nonce => MinerNonce,
-                                solution => Solution}}.
+    ?CLIENT_HANDLER ! {miner, #{event => found_share, job_id => JobId,
+                                miner_nonce => MinerNonce, pow => Pow}}.
 
 set_timer(Timeout) ->
     erlang:send_after(Timeout, self(), worker_timeout).

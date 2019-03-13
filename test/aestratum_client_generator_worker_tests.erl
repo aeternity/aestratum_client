@@ -130,7 +130,7 @@ generate_when_no_worker_abort_worker_valid_solution(Pid) ->
     ExtraNonce = ?NONCE_MODULE:new(extra, 16#ffffffff, 4),
     MinerNonce = ?NONCE_MODULE:new(miner, 0, 4),
 
-    {MinerNonce1, Solution} =
+    {MinerNonce1, Pow} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce),
     ?assertEqual({started, ?TEST_MINER_REPEATS},
                  ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
@@ -139,9 +139,10 @@ generate_when_no_worker_abort_worker_valid_solution(Pid) ->
 
     check_miner(Miner),
     check_worker(Worker, undefined),
-    check_event({miner, #{job_id => ?TEST_JOB_ID1,
+    check_event({miner, #{event => found_share,
+                          job_id => ?TEST_JOB_ID1,
                           miner_nonce => MinerNonce1,
-                          solution => Solution}}).
+                          pow => Pow}}).
 
 generate_when_no_worker_keep_worker_keep_mining(Pid) ->
     Job = ?TEST_JOB1(false),
@@ -193,7 +194,7 @@ generate_when_no_worker_keep_worker_valid_solution(Pid) ->
     ExtraNonce = ?NONCE_MODULE:new(extra, 16#ffffffff, 4),
     MinerNonce = ?NONCE_MODULE:new(miner, 0, 4),
 
-    {MinerNonce1, Solution} =
+    {MinerNonce1, Pow} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce),
     ?assertEqual({started, ?TEST_MINER_REPEATS},
                  ?TEST_MODULE:generate(Pid, Job, ExtraNonce, MinerNonce)),
@@ -202,9 +203,10 @@ generate_when_no_worker_keep_worker_valid_solution(Pid) ->
 
     check_miner(Miner),
     check_worker(Worker, undefined),
-    check_event({miner, #{job_id => ?TEST_JOB_ID1,
+    check_event({miner, #{event => found_share,
+                          job_id => ?TEST_JOB_ID1,
                           miner_nonce => MinerNonce1,
-                          solution => Solution}}).
+                          pow => Pow}}).
 
 generate_when_worker_abort_worker_keep_mining(Pid) ->
     Job1 = ?TEST_JOB1(true),
@@ -272,7 +274,7 @@ generate_when_worker_abort_worker_valid_solution(Pid) ->
     Job2 = ?TEST_JOB2(true),
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
-    {MinerNonce3, Solution} =
+    {MinerNonce3, Pow} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce2),
     ?assertEqual({started, ?TEST_MINER_REPEATS},
                  ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
@@ -281,9 +283,10 @@ generate_when_worker_abort_worker_valid_solution(Pid) ->
 
     check_miner(Miner),
     check_worker(Worker, undefined),
-    check_event({miner, #{job_id => ?TEST_JOB_ID2,
+    check_event({miner, #{event => found_share,
+                          job_id => ?TEST_JOB_ID2,
                           miner_nonce => MinerNonce3,
-                          solution => Solution}}).
+                          pow => Pow}}).
 
 generate_when_worker_keep_worker_keep_mining(Pid) ->
     Job1 = ?TEST_JOB1(true),
@@ -351,7 +354,7 @@ generate_when_worker_keep_worker_valid_solution(Pid) ->
     Job2 = ?TEST_JOB2(false),
     MinerNonce2 = ?NONCE_MODULE:new(miner, 111, 3),
 
-    {_MinerNonce3, _Solution} =
+    {_MinerNonce3, _Pow} =
         mock_generate(return_valid_solution, ExtraNonce, MinerNonce2),
     ?assertEqual({queued, ?TEST_MINER_REPEATS},
                  ?TEST_MODULE:generate(Pid, Job2, ExtraNonce, MinerNonce2)),
@@ -426,10 +429,10 @@ mock_generate(return_valid_solution, ExtraNonce, MinerNonce) ->
     %% The first attempt was with MinerNonce.
     MinerNonce1 = ?NONCE_MODULE:new(miner, MinerNonceValue + 1, MinerNonceNBytes),
     Nonce = ?NONCE_MODULE:merge(ExtraNonce, MinerNonce1),
-    Solution = lists:seq(1, 42),
+    Pow = lists:seq(1, 42),
     meck:expect(?MINER_MODULE, generate,
                 fun(_, _, _, _, _, _) ->
-                        {ok, {?NONCE_MODULE:value(Nonce), Solution}}
+                        {ok, {?NONCE_MODULE:value(Nonce), Pow}}
                 end),
-    {MinerNonce1, Solution}.
+    {MinerNonce1, Pow}.
 

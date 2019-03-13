@@ -13,7 +13,6 @@
           phase,
           req_id = 0,
           reqs = maps:new(),   %% cache of sent requests
-          retries = 0,
           host,
           port,
           user,
@@ -42,28 +41,38 @@ close(State) ->
 %% Internal functions.
 
 handle_conn_event(#{event := init}, #state{phase = connected} = State) ->
-    send_req(configure, State);
+    send_req(configure, 0, State);
 handle_conn_event(#{event := recv_data, data := RawMsg}, State) ->
     case aestratum_jsonrpc:decode(RawMsg) of
         {ok, Msg}    -> recv_msg(Msg, State);
         {error, Rsn} -> recv_msg_error(Rsn, State)
     end;
 %% TODO: {reconnect, Host, Port, WaitTime},...
-handle_conn_event(#{event := timeout, id := Id, phase := Phase}, State) ->
-    handle_conn_timeout(Id, Phase, State);
+handle_conn_event(#{event := timeout, id := Id}, #state{reqs = Reqs} = State) ->
+    case find_req(Id, Reqs) of
+         TimeoutInfo when TimeoutInfo =/= not_found ->
+            handle_conn_timeout(Id, TimeoutInfo, State);
+        not_found ->
+            %% Received unexpected timeout.
+            {no_send, State}
+    end;
 handle_conn_event(#{event := close}, State) ->
     %% TODO: reason, log
     {stop, close_session(State)}.
 
-handle_miner_event(_What, State) ->
-    %% TODO
+handle_miner_event(#{event := found_share} = Info,
+                   #state{phase = authorized} = State) ->
+    Info1 = maps:without([event], Info),
+    send_req(submit, maps:without([event], Info), 0, State);
+handle_miner_event(_Event, State) ->
+    %% TODO: log unexpected miner event.
     {no_send, State}.
 
 %% Handle received messages.
 
 recv_msg(#{type := rsp, id := Id} = Rsp, #state{reqs = Reqs} = State) ->
     case find_req(Id, Reqs) of
-        {_TRef, _Phase, #{method := Method}} ->
+        #{req := #{method := Method}} ->
             %% Received response with correct Id.
             case aestratum_jsonrpc:validate_rsp(Method, Rsp) of
                 {ok, Rsp1} ->
@@ -91,7 +100,7 @@ recv_msg(#{type := req, method := reconnect} = Req, State) ->
 recv_rsp(#{method := configure, result := []},
           #state{phase = connected} = State) ->
     %% TODO: configure has no params (yet).
-    send_req(subscribe, State#state{phase = configured, retries = 0});
+    send_req(subscribe, 0, State#state{phase = configured});
 recv_rsp(#{method := subscribe, result := [SessionId, ExtraNonce]},
           #state{phase = configured} = State) ->
     %% TODO: log successful subscribe
@@ -99,12 +108,12 @@ recv_rsp(#{method := subscribe, result := [SessionId, ExtraNonce]},
     NBytes = byte_size(ExtraNonce) div 2,
     ExtraNonce1 = aestratum_nonce:to_int(extra, ExtraNonce, NBytes),
     ExtraNonce2 = aestratum_nonce:new(extra, ExtraNonce1, NBytes),
-    send_req(authorize, State#state{phase = subscribed, retries = 0,
-                                    extra_nonce = ExtraNonce2});
+    send_req(authorize, 0, State#state{phase = subscribed,
+                                       extra_nonce = ExtraNonce2});
 recv_rsp(#{method := authorize, result := true},
           #state{phase = subscribed} = State) ->
     %% TODO: log authorization success
-    {no_send, State#state{phase = authorized, retries = 0}};
+    {no_send, State#state{phase = authorized}};
 recv_rsp(#{method := authorize, result := false},
           #state{phase = subscribed} = State) ->
     %% TODO: log invalid user/password
@@ -118,7 +127,7 @@ recv_rsp(#{method := submit, result := false},
     %% TODO: log unsuccessful submit
     {no_send, State};
 recv_rsp(#{method := Method, reason := Rsn, msg := ErrMsg,
-            data := ErrData}, State) ->
+           data := ErrData}, State) ->
     %% TODO: log error response
     %% TODO: maybe retry
     {no_send, State}.
@@ -127,9 +136,11 @@ recv_ntf(#{method := set_target, target := Target},
          #state{phase = authorized} = State) ->
     {no_send, State#state{target = aestratum_target:to_int(Target)}};
 recv_ntf(#{method := notify, job_id := JobId, block_version := Blockversion,
-           block_hash := BlockHash, empty_queue := EmptyQueue},
-         #state{phase = authorized} = State) ->
-    %% TODO: create new job, maybe stop the running ones, log, ...
+           block_hash := BlockHash, empty_queue := EmptyQueue} = Ntf,
+         #state{phase = authorized, extra_nonce = ExtraNonce} = State) ->
+    Job = maps:without([method], Ntf),
+    %% TODO: log response here?
+    _Res = aestratum_client_generator_manager:generate(Job, ExtraNonce),
     {no_send, State};
 recv_ntf(#{method := _Method}, State) ->
     %% TODO: log unexpected notification if not in authorized phase.
@@ -155,84 +166,102 @@ recv_msg_error({internal_error, _MaybeId}, State) ->
 
 %% Handle timeout.
 
-handle_conn_timeout(Id, connected, #state{phase = connected, reqs = Reqs} = State) ->
-    send_req(configure, State#state{reqs = del_req(Id, Reqs)});
-handle_conn_timeout(Id, configured, #state{phase = configured, reqs = Reqs} = State) ->
-    send_req(subscribe, State#state{reqs = del_req(Id, Reqs)});
-handle_conn_timeout(Id, subscribed, #state{phase = subscribed, reqs = Reqs} = State) ->
-    send_req(authorize, State#state{reqs = del_req(Id, Reqs)});
+handle_conn_timeout(Id, #{phase := connected, retries := Retries},
+                    #state{phase = connected, reqs = Reqs} = State) ->
+    send_req(configure, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
+handle_conn_timeout(Id, #{phase := configured, retries := Retries},
+                    #state{phase = configured, reqs = Reqs} = State) ->
+    send_req(subscribe, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
+handle_conn_timeout(Id, #{phase := subscribed, retries := Retries},
+                    #state{phase = subscribed, reqs = Reqs} = State) ->
+    send_req(authorize, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
+handle_conn_timeout(Id, #{phase := authorized, retries := Retries, info := Info},
+                    #state{phase = authorized, reqs = Reqs} = State) ->
+    send_req(submit, Info, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
 %% This timeout was set in one phase and got triggered when the session moved
 %% to a next phase (it got triggered during phase switch). The timeout is not
-%% valid anymore, there is not action required.
-handle_conn_timeout(Id, Phase, #state{phase = Phase1, reqs = Reqs} = State) ->
+%% valid anymore, there is no action required.
+handle_conn_timeout(Id, #{phase := Phase},
+                    #state{phase = Phase1, reqs = Reqs} = State) when
+      Phase =/= Phase1 ->
     {no_send, State#state{reqs = del_req(Id, Reqs)}}.
 
 %% Client to server requests.
 
-send_req(ReqType, #state{retries = Retries} = State) ->
+send_req(ReqType, Retries, State) ->
     case Retries > ?MAX_RETRIES of
         true ->
             {stop, close_session(State)};
         false ->
-            State1 = State#state{retries = Retries + 1},
             case ReqType of
-                configure -> send_configure_req(State1);
-                subscribe -> send_subscribe_req(State1);
-                authorize -> send_authorize_req(State1);
-                submit    -> send_submit_req(State1)
+                configure -> send_configure_req(Retries, State);
+                subscribe -> send_subscribe_req(Retries, State);
+                authorize -> send_authorize_req(Retries, State)
             end
     end.
 
-send_configure_req(#state{req_id = Id, reqs = Reqs} = State) ->
+send_req(submit, Info, Retries, State) ->
+    %% TODO: submit request is sent just once, no retries?
+    case Retries >= 1 of
+        true  -> {no_send, State};
+        false -> send_submit_req(Info, Retries, State)
+    end.
+
+send_configure_req(Retries, #state{req_id = Id, reqs = Reqs} = State) ->
     ReqMap = #{type => req, method => configure, id => Id, params => []},
     {send, encode(ReqMap),
      State#state{req_id = next_id(Id),
-                 reqs = add_req(Id, connected, ReqMap, Reqs)}}.
+                 reqs = add_req(Id, connected, Retries, ReqMap, Reqs)}}.
 
-send_subscribe_req(#state{req_id = Id, reqs = Reqs,
-                          host = Host, port = Port} = State) ->
+send_subscribe_req(Retries, #state{req_id = Id, reqs = Reqs,
+                                   host = Host, port = Port} = State) ->
     ReqMap = #{type => req, method => subscribe, id => Id,
                user_agent => ?USER_AGENT, session_id => null, host => Host,
                port => Port},
     {send, encode(ReqMap),
      State#state{req_id = next_id(Id),
-                 reqs = add_req(Id, configured, ReqMap, Reqs)}}.
+                 reqs = add_req(Id, configured, Retries, ReqMap, Reqs)}}.
 
-send_authorize_req(#state{req_id = Id, reqs = Reqs, user = User} = State) ->
+send_authorize_req(Retries, #state{req_id = Id, reqs = Reqs,
+                                   user = User} = State) ->
     ReqMap = #{type => req, method => authorize, id => Id,
                user => User, password => null},
     {send, encode(ReqMap),
      State#state{req_id = next_id(Id),
-                 reqs = add_req(Id, subscribed, ReqMap, Reqs)}}.
+                 reqs = add_req(Id, subscribed, Retries, ReqMap, Reqs)}}.
 
-send_submit_req(#state{req_id = Id, reqs = Reqs} = State) ->
-    User = <<"ae_user">>,
-    JobId = <<"0123456789abcdef">>,
-    MinerNonce = <<"012356789">>,
-    Pow = lists:seq(1, 42),
+send_submit_req(#{job_id := JobId, miner_nonce := MinerNonce, pow := Pow} = Info,
+                Retries, #state{req_id = Id, reqs = Reqs,
+                                user = User} = State) ->
+    MinerNonce1 = aestratum_nonce:to_hex(MinerNonce),
     ReqMap = #{type => req, method => submit, id => Id,
-               user => User, job_id => JobId, miner_nonce => MinerNonce,
+               user => User, job_id => JobId, miner_nonce => MinerNonce1,
                pow => Pow},
     {send, encode(ReqMap),
      State#state{req_id = next_id(Id),
-                 reqs = add_req(Id, authorized, ReqMap, Reqs)}}.
+                 reqs = add_req(Id, authorized, Info, Retries, ReqMap, Reqs)}}.
 
 %% Helper functions.
 
 close_session(#state{reqs = Reqs} = State) ->
     State#state{phase = disconnected, reqs = clean_reqs(Reqs)}.
 
-add_req(Id, Phase, Req, Reqs) ->
-    TimeoutEvent = #{event => timeout, id => Id, phase => Phase},
+add_req(Id, Phase, Retries, Req, Reqs) ->
+    add_req(Id, Phase, undefined, Retries, Req, Reqs).
+
+add_req(Id, Phase, Info, Retries, Req, Reqs) ->
+    TimeoutEvent = #{event => timeout, id => Id},
     TRef = erlang:send_after(?MSG_TIMEOUT, self(), {conn, TimeoutEvent}),
-    maps:put(Id, {TRef, Phase, Req}, Reqs).
+    TimeoutInfo = #{timer => TRef, phase => Phase, info => Info,
+                    retries => Retries, req => Req},
+    maps:put(Id, TimeoutInfo, Reqs).
 
 find_req(Id, Reqs) ->
     maps:get(Id, Reqs, not_found).
 
 del_req(Id, Reqs) ->
     case maps:get(Id, Reqs, not_found) of
-        {TRef, _Phase, _Req} ->
+        #{timer := TRef} ->
             erlang:cancel_timer(TRef),
             maps:remove(Id, Reqs);
         not_found ->
@@ -240,7 +269,7 @@ del_req(Id, Reqs) ->
     end.
 
 clean_reqs(Reqs) ->
-    lists:foreach(fun({_Id, {TRef, _Phase, _Req}}) ->
+    lists:foreach(fun({_Id, #{timer := TRef}}) ->
                           erlang:cancel_timer(TRef)
                   end, maps:to_list(Reqs)),
     maps:new().
@@ -255,7 +284,7 @@ encode(Map) ->
 %% Used for testing.
 
 -ifdef(TEST).
-state(#state{phase = Phase, req_id = ReqId, reqs = Reqs, retries = Retries,
+state(#state{phase = Phase, req_id = ReqId, reqs = Reqs,
              extra_nonce = ExtraNonce, target = Target}) ->
     Target1 =
         case Target of
@@ -266,8 +295,7 @@ state(#state{phase = Phase, req_id = ReqId, reqs = Reqs, retries = Retries,
         end,
     #{phase       => Phase,
       req_id      => ReqId,
-      reqs        => maps:map(fun(Id, {_TRef, Phase, _Req}) -> Phase end, Reqs),
-      retries     => Retries,
+      reqs        => maps:map(fun(Id, #{phase := Phase}) -> Phase end, Reqs),
       extra_nonce => ExtraNonce,
       target      => Target1
      }.

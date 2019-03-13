@@ -36,17 +36,13 @@ init([Module, SessionOpts]) ->
     {ok, #state{pid = self(), module = Module,
                 session = Module:new(SessionOpts)}}.
 
-handle_call({conn, Event}, _From,
+handle_call({conn, _Event} = ConnEvent, _From,
             #state{module = Module, session = Session} = State) ->
-	Res = Module:handle_event({conn, Event}, Session),
+	Res = Module:handle_event(ConnEvent, Session),
     {reply, result(Res, State), State#state{session = session(Res)}};
-handle_call({chain, _Event}, Pid, #state{pid = Pid} = State) ->
-    %% The chain events originated in the session module will be ignored,
-    %% we want to simulate these events from the test process.
-    {noreply, State};
-handle_call({chain, Event}, _From,
+handle_call({miner, _Event} = MinerEvent, _From,
             #state{module = Module, session = Session} = State) ->
-	Res = Module:handle_event({chain, Event}, Session),
+	Res = Module:handle_event(MinerEvent, Session),
     {reply, result(Res, State), State#state{session = session(Res)}};
 handle_call({state_to_map, Session}, _From,
             #state{module = Module} = State) ->
