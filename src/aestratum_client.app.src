@@ -6,8 +6,7 @@
    [kernel,
     stdlib,
     crypto,
-    aestratum_lib,
-    aeminer
+    aestratum_lib
    ]},
   {mod,{aestratum_client_app,[]}},
   {env,[]},
