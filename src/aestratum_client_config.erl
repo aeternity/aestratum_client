@@ -12,12 +12,12 @@ get() ->
     #{conn =>
         #{transport    => tcp,
           socket_opts  => [],
-          host         => <<"pool.aeternity.com">>,
+          host         => <<"localhost">>, %%<<"pool.aeternity.com">>,
           port         => 9999,
           req_timeout  => 30000,
           req_retries  => 3},
-      user =>
-        #{name         => <<"ak_DummyPubKeyDoNotEverUse999999999999999999999999999">>,
+      user => %% TODO: user => user is weird, change to user_cfg => user
+        #{user => <<"ak_DummyPubKeyDoNotEverUse999999999999999999999999999">>,
           %% worker       => TODO
           password     => null},
       miners =>
