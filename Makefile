@@ -10,20 +10,22 @@ unexport TEST
 endif
 
 all:
-	$(REBAR) compile
+	$(REBAR) as local compile
 
 doc:
-	$(REBAR) doc
+	$(REBAR) as local doc
 
 dialyzer:
-	$(REBAR) dialyzer
+	$(REBAR) as local dialyzer
 
 ct:
-	$(REBAR) ct
+	$(REBAR) as test ct
 
 eunit:
-	$(REBAR) eunit $(EUNIT_TEST_FLAGS)
+	$(REBAR) as test eunit $(EUNIT_TEST_FLAGS)
 
+rel:
+	$(REBAR) as prod release
 
 clean:
 	$(REBAR) clean
@@ -33,5 +35,5 @@ distclean: clean
 	rm -rf _build
 
 console:
-	$(REBAR) shell
+	$(REBAR) as local shell
 
