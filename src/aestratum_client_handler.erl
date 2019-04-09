@@ -44,7 +44,7 @@ init(#{conn := ConnConfig, user := UserConfig}) ->
     Port = maps:get(port, ConnConfig),
     SocketOpts = maps:get(socket_opts, ConnConfig),
     Socket = connect(Transport, Host, Port, SocketOpts),
-    set_socket_opts(Socket, [{active, once}, {packet, line}, {keepalive, true}]),
+    set_socket_opts(Socket, [binary, {active, once}, {packet, line}, {keepalive, true}]),
     SessionOpts = UserConfig#{host => Host, port => Port},
     gen_server:cast(self(), {init_session, SessionOpts}),
     {ok, #state{socket = Socket, transport = Transport}}.
@@ -82,13 +82,12 @@ terminate(_Rsn, _State) ->
 
 %% Internal functions.
 
-handle_socket_data(Data, #state{socket = Socket, transport = Transport,
-                                session = Session} = State) ->
+handle_socket_data(Data, #state{socket = Socket, session = Session} = State) ->
     Event = #{event => recv_data, data => Data},
 	Res = aestratum_client_session:handle_event({conn, Event}, Session),
 	case is_stop(Res) of
 	    true  -> ok;
-	    false -> Transport:setopts(Socket, [{active, once}])
+	    false -> inet:setopts(Socket, [{active, once}])
     end,
     result(Res, State).
 
