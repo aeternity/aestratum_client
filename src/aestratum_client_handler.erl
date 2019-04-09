@@ -137,11 +137,10 @@ transport(ssl) -> ssl.
 connect(Transport, Host, Port, Opts) ->
     case Transport:connect(binary_to_list(Host), Port, Opts) of
         {ok, Socket} -> Socket;
-        _Other       -> undefined
+        Other        -> error(Other)
     end.
 
 set_socket_opts(Socket, Opts) when Socket =/= undefined ->
     inet:setopts(Socket, Opts);
 set_socket_opts(_Socket, _Opts) ->
     ok.
-

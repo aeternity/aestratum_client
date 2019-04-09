@@ -95,7 +95,7 @@ stop(Pid) ->
 -spec generate(pid(), job(), extra_nonce(), miner_nonce()) ->
     {started | queued, repeats()}.
 generate(Pid, Job, ExtraNonce, MinerNonce) ->
-    gen_server:call(Pid, {generate, Job, ExtraNonce, MinerNonce}).
+    gen_server:call(Pid, {generate, Job, ExtraNonce, MinerNonce}, infinity).
 
 -spec pid(worker()) -> pid().
 pid(#worker{pid = Pid}) ->
@@ -261,4 +261,3 @@ cancel_timer(Timer) when is_reference(Timer) ->
 
 cancel_monitor(Monitor) when is_reference(Monitor) ->
     demonitor(Monitor, [flush]).
-
