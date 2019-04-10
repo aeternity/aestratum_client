@@ -47,17 +47,17 @@ stop() ->
 add(Id, Pid, Repeats) when
       is_integer(Id) and is_pid(Pid) and
       (is_integer(Repeats) and (Repeats > 0)) ->
-    gen_server:call(?SERVER, {add, Id, Pid, Repeats}, infinity).
+    gen_server:call(?SERVER, {add, Id, Pid, Repeats}).
 
 -spec del(id()) -> ok.
 del(Id) when is_integer(Id) ->
-    gen_server:call(?SERVER, {del, Id}, infinity).
+    gen_server:call(?SERVER, {del, Id}).
 
 %% TODO
 -spec generate(term(), extra_nonce()) ->
     {ok, stats()} | {error, miner_nonce_exhausted}.
 generate(Job, ExtraNonce) ->
-    gen_server:call(?SERVER, {generate, Job, ExtraNonce}, infinity).
+    gen_server:call(?SERVER, {generate, Job, ExtraNonce}).
 
 %% gen_server callbacks.
 
@@ -139,3 +139,4 @@ update_stats(started, Repeats, #{started := {WorkerCount, NonceCount}} = Stats) 
     Stats#{started => {WorkerCount + 1, NonceCount + Repeats}};
 update_stats(queued, Repeats, #{queued := {WorkerCount, NonceCount}} = Stats) ->
     Stats#{queued => {WorkerCount + 1, NonceCount + Repeats}}.
+

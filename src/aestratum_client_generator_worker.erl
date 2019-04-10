@@ -95,7 +95,7 @@ stop(Pid) ->
 -spec generate(pid(), job(), extra_nonce(), miner_nonce()) ->
     {started | queued, repeats()}.
 generate(Pid, Job, ExtraNonce, MinerNonce) ->
-    gen_server:call(Pid, {generate, Job, ExtraNonce, MinerNonce}, infinity).
+    gen_server:call(Pid, {generate, Job, ExtraNonce, MinerNonce}).
 
 -spec pid(worker()) -> pid().
 pid(#worker{pid = Pid}) ->
