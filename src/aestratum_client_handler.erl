@@ -43,7 +43,7 @@ init(#{conn := ConnConfig, user := UserConfig}) ->
     Host = maps:get(host, ConnConfig),
     Port = maps:get(port, ConnConfig),
     SocketOpts = maps:get(socket_opts, ConnConfig),
-    Socket = connect(Transport, Host, Port, SocketOpts),
+    {ok, Socket} = connect(Transport, Host, Port, SocketOpts),
     set_socket_opts(Socket, [binary, {active, once}, {packet, line}, {keepalive, true}]),
     SessionOpts = UserConfig#{host => Host, port => Port},
     gen_server:cast(self(), {init_session, SessionOpts}),
@@ -135,12 +135,10 @@ transport(tcp) -> gen_tcp;
 transport(ssl) -> ssl.
 
 connect(Transport, Host, Port, Opts) ->
-    case Transport:connect(binary_to_list(Host), Port, Opts) of
-        {ok, Socket} -> Socket;
-        Other        -> error(Other)
-    end.
+    Transport:connect(binary_to_list(Host), Port, Opts).
 
 set_socket_opts(Socket, Opts) when Socket =/= undefined ->
     inet:setopts(Socket, Opts);
 set_socket_opts(_Socket, _Opts) ->
     ok.
+
