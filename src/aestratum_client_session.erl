@@ -137,10 +137,12 @@ recv_ntf(#{method := set_target, target := Target},
     {no_send, State#state{target = aestratum_target:to_int(Target)}};
 recv_ntf(#{method := notify, job_id := JobId, block_version := Blockversion,
            block_hash := BlockHash, empty_queue := EmptyQueue} = Ntf,
-         #state{phase = authorized, extra_nonce = ExtraNonce} = State) ->
+         #state{phase = authorized, extra_nonce = ExtraNonce,
+                target = Target} = State) ->
     Job = maps:without([method], Ntf),
+    Job1 = Job#{target => Target},
     %% TODO: log response here?
-    _Res = aestratum_client_generator_manager:generate(Job, ExtraNonce),
+    _Res = aestratum_client_generator_manager:generate(Job1, ExtraNonce),
     {no_send, State};
 recv_ntf(#{method := _Method}, State) ->
     %% TODO: log unexpected notification if not in authorized phase.
