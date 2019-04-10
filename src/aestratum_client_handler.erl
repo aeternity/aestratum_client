@@ -33,19 +33,19 @@
 %% API.
 
 -spec start_link(config()) -> {ok, pid()}.
-start_link(Config) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, Config, []).
+start_link(Cfg) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, Cfg, []).
 
 %% gen_server callbacks.
 
-init(#{conn := ConnConfig, user := UserConfig}) ->
-    Transport = transport(maps:get(transport, ConnConfig)),
-    Host = maps:get(host, ConnConfig),
-    Port = maps:get(port, ConnConfig),
-    SocketOpts = maps:get(socket_opts, ConnConfig),
+init(#{conn_cfg := ConnCfg, user_cfg := UserCfg}) ->
+    Transport = transport(maps:get(transport, ConnCfg)),
+    Host = maps:get(host, ConnCfg),
+    Port = maps:get(port, ConnCfg),
+    SocketOpts = maps:get(socket_opts, ConnCfg),
     {ok, Socket} = connect(Transport, Host, Port, SocketOpts),
     set_socket_opts(Socket, [binary, {active, once}, {packet, line}, {keepalive, true}]),
-    SessionOpts = UserConfig#{host => Host, port => Port},
+    SessionOpts = UserCfg#{host => Host, port => Port},
     gen_server:cast(self(), {init_session, SessionOpts}),
     {ok, #state{socket = Socket, transport = Transport}}.
 

@@ -10,8 +10,8 @@
 %% application callbacks.
 
 start(_Type, _Args) ->
-    Config = aestratum_client_config:get(),
-    aestratum_client_sup:start_link(Config).
+    {ok, Cfg} = aestratum_client_config:read(),
+    aestratum_client_sup:start_link(Cfg).
 
 stop(_State) ->
 	ok.

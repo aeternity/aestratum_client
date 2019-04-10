@@ -13,13 +13,13 @@
 %% API.
 
 -spec start_link(config()) -> {ok, pid()}.
-start_link(Config) ->
-    supervisor:start_link(?MODULE, Config).
+start_link(Cfg) ->
+    supervisor:start_link(?MODULE, Cfg).
 
 %% supervisor callbacks.
 
-init(#{miners := MinerConfigs}) ->
-    Miners = configs_to_miners(MinerConfigs),
+init(#{miners_cfg := MinerCfgs}) ->
+    Miners = configs_to_miners(MinerCfgs),
     Procs =
         [{{aestratum_client_generator_worker, aestratum_client_miner:id(Miner)},
           {aestratum_client_generator_worker, start_link, [Miner]},
@@ -29,26 +29,26 @@ init(#{miners := MinerConfigs}) ->
 
 %% Converts the client's configs into miner configs and they are converted
 %% into miners.
-configs_to_miners(MinerConfigs) ->
-    configs_to_miners([to_miner_config(MinerConfig)
-                       || MinerConfig <- MinerConfigs], 0, []).
+configs_to_miners(MinerCfgs) ->
+    configs_to_miners([to_miner_config(MinerCfg)
+                       || MinerCfg <- MinerCfgs], 0, []).
 
-configs_to_miners([MinerConfig | MinerConfigs], Id, Acc) ->
-    case aestratum_miner:instances(MinerConfig) of
+configs_to_miners([MinerCfg | MinerCfgs], Id, Acc) ->
+    case aestratum_miner:instances(MinerCfg) of
         undefined ->
-            {Id1, Acc1} = add_miners(Id, [undefined], MinerConfig, Acc),
-            configs_to_miners(MinerConfigs, Id1, Acc1);
+            {Id1, Acc1} = add_miners(Id, [undefined], MinerCfg, Acc),
+            configs_to_miners(MinerCfgs, Id1, Acc1);
         Instances when is_list(Instances) ->
-            {Id1, Acc1} = add_miners(Id, Instances, MinerConfig, Acc),
-            configs_to_miners(MinerConfigs, Id1, Acc1)
+            {Id1, Acc1} = add_miners(Id, Instances, MinerCfg, Acc),
+            configs_to_miners(MinerCfgs, Id1, Acc1)
     end;
 configs_to_miners([], _Id, Acc) ->
     lists:reverse(Acc).
 
-add_miners(Id, [Instance | Instances], MinerConfig, Acc) ->
-    Acc1 = [aestratum_client_miner:new(Id, Instance, MinerConfig) | Acc],
-    add_miners(Id + 1, Instances, MinerConfig, Acc1);
-add_miners(Id, [], _MinerConfig, Acc) ->
+add_miners(Id, [Instance | Instances], MinerCfg, Acc) ->
+    Acc1 = [aestratum_client_miner:new(Id, Instance, MinerCfg) | Acc],
+    add_miners(Id + 1, Instances, MinerCfg, Acc1);
+add_miners(Id, [], _MinerCfg, Acc) ->
     {Id, Acc}.
 
 to_miner_config(#{exec := Exec, exec_group := ExecGroup, extra_args := ExtraArgs,
