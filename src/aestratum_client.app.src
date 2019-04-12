@@ -6,6 +6,8 @@
    [kernel,
     stdlib,
     crypto,
+    jesse,
+    yamerl,
     aestratum_lib
    ]},
   {mod,{aestratum_client_app,[]}},

@@ -1,0 +1,93 @@
+{
+    "$schema" : "http://json-schema.org/draft-04/schema#",
+    "type" : "object",
+    "additionalProperties" : false,
+    "properties" : {
+        "connection" : {
+            "type"    : "object",
+            "additionalProperties": false,
+            "properties" : {
+                "host" : {
+                    "description" : "Stratum server domain name.",
+                    "type" : "string",
+                    "default" : "pool.aeternity.com"
+                },
+                "port" : {
+                    "description" : "Stratum server port.",
+                    "type" : "integer",
+                    "minimum" : 0,
+                    "maximum" : 65535,
+                    "default" : 9999
+                },
+                "transport" : {
+                    "description" : "TCP or SSL.",
+                    "type" : "string",
+                    "enum" : ["tcp", "ssl"],
+                    "default" : "tcp"
+                },
+                "req_timeout" : {
+                    "description" : "Request timeout.",
+                    "type" : "integer",
+                    "default" : 15
+                },
+                "req_retries" : {
+                    "description" : "Request retries.",
+                    "type" : "integer",
+                    "default" : 3
+                }
+            }
+        },
+        "user" : {
+            "type" : "object",
+            "additionalProperties" : false,
+            "properties" : {
+                "user" : {
+                    "description" : "Public key where reward is sent.",
+                    "type" : "string",
+                    "example" : "ak_DummyPubKeyDoNotEverUse999999999999999999999999999",
+                    "pattern": "^ak_[1-9A-HJ-NP-Za-km-z]*$"
+                }
+            }
+        },
+        "miners" : {
+            "type" : "array",
+            "minItems" : 1,
+            "items" : {
+                "type" : "object",
+                "additionalProperties" : false,
+                "properties" : {
+                    "exec" : {
+                        "description" : "Executable.",
+                        "type" : "string"
+                    },
+                    "exec_group" : {
+                        "description": "Executable group.",
+                        "type": "string",
+                        "default": "aecuckoo"
+                    },
+                    "extra_args" : {
+                        "description": "Extra arguments.",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "hex_enc_hdr" : {
+                        "description" : "Hex encoded header.",
+                        "type" : "boolean",
+                        "default": true
+                    },
+                    "repeats" : {
+                        "description" : "Repeats (how many nonces to try).",
+                        "type" : "integer",
+                        "minimum" : 1,
+                        "default" : 20
+                    },
+                    "edge_bits" : {
+                        "description" : "Edge bits.",
+                        "type" : "integer",
+                        "default" : 29
+                    }
+                }
+            }
+        }
+    }
+}

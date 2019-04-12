@@ -1,0 +1,15 @@
+connection:
+        transport: tcp
+        host: "localhost"
+        port: 9999
+        req_timeout: 15
+        req_retries: 3
+user:
+        user: "ak_DummyPubKeyDoNotEverUse999999999999999999999999999"
+miners:
+        - exec: "mean29-generic"
+          exec_group: "aecuckoo"
+          extra_args: ""
+          hex_enc_hdr: true
+          repeats: 100
+          edge_bits: 29
