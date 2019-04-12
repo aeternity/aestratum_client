@@ -67,11 +67,10 @@ handle_info({SocketClose, _Socket}, State) when ?IS_CLOSE(SocketClose) ->
 	handle_socket_close(State);
 handle_info({SocketError, _Socket, Rsn}, State) when ?IS_ERROR(SocketError) ->
     handle_socket_error(Rsn, State);
-handle_info({conn, Event}, State) ->
-    handle_conn_event(Event, State);
-%% TODO
-handle_info({miner, Event}, State) ->
-    handle_miner_event(Event, State);
+handle_info({conn, _Event} = ConnEvent, State) ->
+    handle_conn_event(ConnEvent, State);
+handle_info({miner, _Event} = MinerEvent, State) ->
+    handle_miner_event(MinerEvent, State);
 handle_info(_Info, State) ->
 	{stop, normal, State}.
 
