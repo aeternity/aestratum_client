@@ -10,6 +10,6 @@ miners:
         - exec: "mean29-generic"
           exec_group: "aecuckoo"
           extra_args: ""
-          hex_enc_hdr: true
+          hex_enc_hdr: false
           repeats: 100
           edge_bits: 29

@@ -6,6 +6,7 @@
    [kernel,
     stdlib,
     crypto,
+    lager,
     jesse,
     yamerl,
     aestratum_lib
