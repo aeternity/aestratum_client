@@ -53,7 +53,6 @@ add(Id, Pid, Repeats) when
 del(Id) when is_integer(Id) ->
     gen_server:call(?SERVER, {del, Id}).
 
-%% TODO
 -spec generate(term(), extra_nonce()) ->
     {ok, stats()} | {error, miner_nonce_exhausted}.
 generate(Job, ExtraNonce) ->

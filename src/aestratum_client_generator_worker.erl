@@ -33,6 +33,9 @@
 
 -define(CLIENT_HANDLER, aestratum_client_handler).
 
+-define(INFO(Fmt, Args), aestratum_client:info(Fmt, Args)).
+-define(ERROR(Fmt, Args), aestratum_client:error(Fmt, Args)).
+
 -type miner()           :: aestratum_client_miner:miner().
 
 -type job_id()          :: <<_:(16 * 8)>>.
@@ -206,6 +209,10 @@ spawn_worker(Miner, #{job_id := JobId, block_hash := BlockHash,
         spawn_monitor(?MODULE, worker_process,
                       [self(), BlockHash, BlockVersion, Target, Nonce,
                        Instance, Config]),
+    ?INFO("spawn_worker, pid: ~p, block_hash: ~p, block_version: ~p, "
+          "target: ~p, nonce: ~p, instance: ~p",
+          [Pid, BlockHash, BlockVersion, aestratum_target:to_hex(Target),
+           aestratum_nonce:value(Nonce), Instance]),
     {#worker{pid = Pid, job_id = JobId, block_hash = BlockHash,
              block_version = BlockVersion, target = Target,
              extra_nonce = ExtraNonce, miner_nonce = MinerNonce,
@@ -215,11 +222,15 @@ spawn_worker(Miner, #{job_id := JobId, block_hash := BlockHash,
 worker_process(Parent, BlockHash, BlockVersion, Target, Nonce, Instance, Config) ->
     case aestratum_miner:generate(BlockHash, BlockVersion, Target, Nonce,
                                   Instance, Config) of
-        {ok, {_Nonce, _Pow} = Reply} ->
+        {ok, {Nonce, Pow} = Reply} ->
+            ?INFO("worker_found_solution, pid: ~p, nonce: ~p, pow: ~p",
+                  [self(), Nonce, Pow]),
             make_worker_reply(Parent, Reply);
         {error, no_solution = Reply} ->
+            ?INFO("worker_no_solution, pid: ~p", [self()]),
             make_worker_reply(Parent, Reply);
-        {error, {runtime, _Rsn}} ->
+        {error, {runtime, Rsn}} ->
+            ?ERROR("worker_error, reason: ~p, pid: ~p", [Rsn, self()]),
             make_worker_reply(Parent, runtime_error)
     end.
 
@@ -230,6 +241,7 @@ kill_worker(#worker{pid = Pid, monitor = Monitor, timer = Timer}) ->
     cancel_monitor(Monitor),
     cancel_timer(Timer),
     exit(Pid, shutdown),
+    ?INFO("worker_killed, pid: ~p", [Pid]),
     flush_worker_reply().
 
 flush_worker_reply() ->

@@ -26,6 +26,9 @@
 
 -define(SERVER, ?MODULE).
 
+-define(INFO(Fmt, Args), aestratum_client:info(Fmt, Args)).
+-define(WARN(Fmt, Args), aestratum_client:warning(Fmt, Args)).
+
 -define(IS_MSG(T), ((T =:= tcp) or (T =:= ssl))).
 -define(IS_CLOSE(C), ((C =:= tcp_closed) or (C =:= ssl_closed))).
 -define(IS_ERROR(E), ((E =:= tcp_error) or (E =:= ssl_error))).
@@ -44,6 +47,8 @@ init(#{conn_cfg := ConnCfg, user_cfg := UserCfg}) ->
     Port = maps:get(port, ConnCfg),
     SocketOpts = maps:get(socket_opts, ConnCfg),
     {ok, Socket} = connect(Transport, Host, Port, SocketOpts),
+    ?INFO("socket_connected, transport: ~p, host: ~p, port: ~p",
+          [Transport, Host, Port]),
     set_socket_opts(Socket, [binary, {active, once}, {packet, line}, {keepalive, true}]),
     SessionOpts = UserCfg#{host => Host, port => Port},
     gen_server:cast(self(), {init_session, SessionOpts}),
@@ -70,9 +75,7 @@ handle_info({SocketError, _Socket, Rsn}, State) when ?IS_ERROR(SocketError) ->
 handle_info({conn, _Event} = ConnEvent, State) ->
     handle_conn_event(ConnEvent, State);
 handle_info({miner, _Event} = MinerEvent, State) ->
-    handle_miner_event(MinerEvent, State);
-handle_info(_Info, State) ->
-	{stop, normal, State}.
+    handle_miner_event(MinerEvent, State).
 
 terminate(_Rsn, #state{session = Session}) when Session =/= undefined ->
     aestratum_client_session:close(Session);
@@ -91,12 +94,13 @@ handle_socket_data(Data, #state{socket = Socket, session = Session} = State) ->
     result(Res, State).
 
 handle_socket_close(#state{session = Session} = State) ->
+    ?WARN("socket_close", []),
     Event = #{event => close},
     Res = aestratum_client_session:handle_event({conn, Event}, Session),
     result(Res, State).
 
-handle_socket_error(_Rsn, #state{session = Session} = State) ->
-    %% TODO: log error
+handle_socket_error(Rsn, #state{session = Session} = State) ->
+    ?WARN("socket_error, reason: ~p", [Rsn]),
     Event = #{event => close},
     Res = aestratum_client_session:handle_event({conn, Event}, Session),
     result(Res, State).
@@ -114,7 +118,8 @@ result({send, Data, Session},
     case send_data(Data, Socket, Transport) of
         ok ->
             {noreply, State#state{session = Session}};
-        {error, _Rsn} ->
+        {error, Rsn} ->
+            ?WARN("socket_send, reason: ~p, data: ~p", [Rsn, Data]),
             Event = #{event => close},
             Res = aestratum_client_session:handle_event({conn, Event}, Session),
             result(Res, State)
