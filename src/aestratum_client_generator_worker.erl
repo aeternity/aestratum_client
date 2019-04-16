@@ -266,11 +266,15 @@ notify(Nonce, Pow,
     ?CLIENT_HANDLER ! {miner, #{event => found_share, job_id => JobId,
                                 miner_nonce => MinerNonce, pow => Pow}}.
 
-set_timer(Timeout) ->
-    erlang:send_after(Timeout, self(), worker_timeout).
+set_timer(Timeout) when Timeout =/= infinity ->
+    erlang:send_after(Timeout, self(), worker_timeout);
+set_timer(infinity) ->
+    undefined.
 
 cancel_timer(Timer) when is_reference(Timer) ->
-    erlang:cancel_timer(Timer).
+    erlang:cancel_timer(Timer);
+cancel_timer(undefined) ->
+    ok.
 
 cancel_monitor(Monitor) when is_reference(Monitor) ->
     demonitor(Monitor, [flush]).
