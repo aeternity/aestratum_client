@@ -223,9 +223,9 @@ spawn_worker(Miner, #{job_id := JobId, block_hash := BlockHash,
 worker_process(Parent, BlockHash, BlockVersion, Target, Nonce, Instance, Config) ->
     case aestratum_miner:generate(BlockHash, BlockVersion, Target, Nonce,
                                   Instance, Config) of
-        {ok, {Nonce, Pow} = Reply} ->
+        {ok, {Nonce1, Pow} = Reply} ->
             ?INFO("worker_found_solution, pid: ~p, nonce: ~p, pow: ~p",
-                  [self(), Nonce, Pow]),
+                  [self(), Nonce1, Pow]),
             make_worker_reply(Parent, Reply);
         {error, no_solution = Reply} ->
             ?INFO("worker_no_solution, pid: ~p", [self()]),
