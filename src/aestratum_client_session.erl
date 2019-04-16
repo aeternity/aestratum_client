@@ -161,9 +161,9 @@ recv_msg_error({invalid_msg = Rsn, MaybeId}, State) ->
 recv_msg_error({invalid_method = Rsn, MaybeId}, State) ->
     ?ERROR("recv_msg_error, reason: ~p, id: ~p", [Rsn, MaybeId]),
     {stop, close_session(State)};
-recv_msg_error({invalid_param = Rsn, MaybeId, Param}, State) ->
-    ?ERROR("recv_msg_error, reason: ~p, id: ~p, param: ~p",
-           [Rsn, MaybeId, Param]),
+recv_msg_error({invalid_param = Rsn, Param, MaybeId}, State) ->
+    ?ERROR("recv_msg_error, reason: ~p, param: ~p, id: ~p",
+           [Rsn, Param, MaybeId]),
     {stop, close_session(State)};
 recv_msg_error({internal_error = Rsn, MaybeId}, State) ->
     ?ERROR("recv_msg_error, reason: ~p, id: ~p", [Rsn, MaybeId]),
