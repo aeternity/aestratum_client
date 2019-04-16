@@ -26,6 +26,8 @@
          terminate/2
         ]).
 
+-include("aestratum_client_log.hrl").
+
 %% Internal exports.
 -export([worker_process/7]).
 
@@ -33,8 +35,6 @@
 
 -define(CLIENT_HANDLER, aestratum_client_handler).
 
--define(INFO(Fmt, Args), aestratum_client:info(Fmt, Args)).
--define(ERROR(Fmt, Args), aestratum_client:error(Fmt, Args)).
 
 -type miner()           :: aestratum_client_miner:miner().
 
@@ -169,7 +169,7 @@ terminate(_Rsn, #state{miner = Miner}) ->
 
 handle_generate(abort, Job, ExtraNonce, MinerNonce,
                 #state{miner = Miner, worker = #worker{} = Worker} = State) ->
-    kill_worker(Worker),
+    kill_worker(Worker, aborted),
     {Worker1, Repeats} = spawn_worker(Miner, Job, ExtraNonce, MinerNonce, 30000),
     {ok, {started, Repeats}, State#state{worker = Worker1}};
 handle_generate(_Action, Job, ExtraNonce, MinerNonce,
@@ -189,7 +189,7 @@ handle_reply(Reply, #state{worker = #worker{monitor = Monitor,
     State#state{worker = undefined}.
 
 handle_timeout(#state{worker = #worker{} = Worker} = State) ->
-    kill_worker(Worker),
+    kill_worker(Worker, timeout),
     State#state{worker = undefined};
 handle_timeout(#state{worker = undefined} = State) ->
     State.
@@ -237,11 +237,11 @@ worker_process(Parent, BlockHash, BlockVersion, Target, Nonce, Instance, Config)
 make_worker_reply(Parent, Reply) ->
     Parent ! {worker_reply, Reply}.
 
-kill_worker(#worker{pid = Pid, monitor = Monitor, timer = Timer}) ->
+kill_worker(#worker{pid = Pid, monitor = Monitor, timer = Timer}, Rsn) ->
     cancel_monitor(Monitor),
     cancel_timer(Timer),
     exit(Pid, shutdown),
-    ?INFO("worker_killed, pid: ~p", [Pid]),
+    ?INFO("worker_killed, reason: ~p, pid: ~p", [Rsn, Pid]),
     flush_worker_reply().
 
 flush_worker_reply() ->

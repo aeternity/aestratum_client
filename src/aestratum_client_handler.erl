@@ -16,6 +16,8 @@
          terminate/2
         ]).
 
+-include("aestratum_client_log.hrl").
+
 -type config() :: aestratum_client_config:config().
 
 -record(state, {
@@ -25,9 +27,6 @@
          }).
 
 -define(SERVER, ?MODULE).
-
--define(INFO(Fmt, Args), aestratum_client:info(Fmt, Args)).
--define(WARN(Fmt, Args), aestratum_client:warning(Fmt, Args)).
 
 -define(IS_MSG(T), ((T =:= tcp) or (T =:= ssl))).
 -define(IS_CLOSE(C), ((C =:= tcp_closed) or (C =:= ssl_closed))).

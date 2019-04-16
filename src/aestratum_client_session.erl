@@ -9,6 +9,8 @@
 -export([state/1]).
 -endif.
 
+-include("aestratum_client_log.hrl").
+
 -record(state, {
           phase,
           req_id = 0,
@@ -20,11 +22,6 @@
           target
         }).
 
--define(DEBUG(Fmt, Args), aestratum_client:debug(Fmt, Args)).
--define(INFO(Fmt, Args), aestratum_client:info(Fmt, Args)).
--define(ERROR(Fmt, Args), aestratum_client:error(Fmt, Args)).
--define(WARN(Fmt, Args), aestratum_client:warning(Fmt, Args)).
--define(CRITICAL(Fmt, Args), aestratum_client:critical(Fmt, Args)).
 
 -define(USER_AGENT, <<"aeclient/1.0.0">>). %% TODO: get version programatically
 -define(MAX_RETRIES, application:get_env(aestratum, max_retries, 3)).
