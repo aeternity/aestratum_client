@@ -23,7 +23,7 @@ init(#{miners_cfg := MinerCfgs}) ->
     Procs =
         [{{aestratum_client_generator_worker, aestratum_client_miner:id(Miner)},
           {aestratum_client_generator_worker, start_link, [Miner]},
-          permanent, brutal_kill, worker, [aestratum_client_generator_worker]}
+          permanent, 5000, worker, [aestratum_client_generator_worker]}
          || Miner <- Miners],
     {ok, {{one_for_one, 1, 5}, Procs}}.
 

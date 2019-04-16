@@ -160,9 +160,10 @@ handle_info(worker_timeout, State) ->
 handle_info({'DOWN', Ref, process, _Pid, Rsn}, State) ->
     {noreply, handle_down(Ref, Rsn, State)}.
 
-terminate(_Rsn, #state{miner = Miner}) ->
+terminate(Rsn, #state{miner = Miner, worker = Worker}) ->
     MinerId = aestratum_client_miner:id(Miner),
     aestratum_client_generator_manager:del(MinerId),
+    if Worker =/= undefined -> kill_worker(Worker, Rsn); true -> ok end,
     ok.
 
 %% Internal functions.
@@ -241,7 +242,7 @@ kill_worker(#worker{pid = Pid, monitor = Monitor, timer = Timer}, Rsn) ->
     cancel_monitor(Monitor),
     cancel_timer(Timer),
     exit(Pid, shutdown),
-    ?INFO("worker_killed, reason: ~p, pid: ~p", [Rsn, Pid]),
+    ?INFO("kill_worker, reason: ~p, pid: ~p", [Rsn, Pid]),
     flush_worker_reply().
 
 flush_worker_reply() ->
