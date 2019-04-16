@@ -272,9 +272,12 @@ handle_miner_found_share(FoundShareEvent, State) ->
 
 %% Helper functions.
 
-close_session(#state{reqs = Reqs} = State) ->
+close_session(#state{phase = Phase, reqs = Reqs} = State) when
+      Phase =/= disconnected ->
     ?CRITICAL("close_session", []),
-    State#state{phase = disconnected, reqs = clean_reqs(Reqs)}.
+    State#state{phase = disconnected, reqs = clean_reqs(Reqs)};
+close_session(State) ->
+    State.
 
 add_req(Id, Phase, Retries, Req, Reqs) ->
     add_req(Id, Phase, undefined, Retries, Req, Reqs).
