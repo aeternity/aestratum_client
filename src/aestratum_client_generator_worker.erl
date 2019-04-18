@@ -38,7 +38,7 @@
 
 -type miner()           :: aestratum_client_miner:miner().
 
--type job_id()          :: <<_:(16 * 8)>>.
+-type job_id()          :: binary().
 
 -type block_hash()      :: aestratum_miner:block_hash().
 
@@ -263,8 +263,8 @@ notify(Nonce, Pow,
     ExtraNonceNBytes = aestratum_nonce:nbytes(ExtraNonce),
     {ExtraNonce, MinerNonce} =
         aestratum_nonce:split({extra, ExtraNonceNBytes}, Nonce1),
-    ?CLIENT_HANDLER ! {miner, #{event => found_share, job_id => JobId,
-                                miner_nonce => MinerNonce, pow => Pow}}.
+    Share = #{job_id => JobId, miner_nonce => MinerNonce, pow => Pow},
+    ?CLIENT_HANDLER ! {miner, #{event => found_share, share => Share}}.
 
 set_timer(Timeout) when Timeout =/= infinity ->
     erlang:send_after(Timeout, self(), worker_timeout);

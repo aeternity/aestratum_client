@@ -9,19 +9,78 @@
 -export([state/1]).
 -endif.
 
+-export_type([session/0]).
+
 -include("aestratum_client_log.hrl").
 
+-type config()                  :: map().
+
+-type phase()                   :: connected
+                                 | configured
+                                 | subscribed
+                                 | authorized
+                                 | disconnected.
+
+-type req_id()                  :: non_neg_integer().
+
+-type host()                    :: binary().
+
+-type integer_port()            :: non_neg_integer().
+
+-type extra_nonce()             :: aestratum_nonce:part_nonce().
+
+-type target()                  :: aestratum_target:int_target().
+
+-type raw_msg()                 :: aestratum_jsonrpc:raw_msg().
+
+-type event()                   :: {conn, conn_event()}
+                                 | {miner, miner_event()}.
+
+-type conn_event()              :: conn_init_event()
+                                 | conn_recv_data_event()
+                                 | conn_timeout_event()
+                                 | conn_close_event().
+
+-type conn_init_event()         :: #{event       => init}.
+
+-type conn_recv_data_event()    :: #{event       => recv_data,
+                                     data        => raw_msg()}.
+
+-type conn_timeout_event()      :: #{event       => timeout}.
+
+-type conn_close_event()        :: #{event       => close}.
+
+-type miner_event()             :: miner_found_share_event().
+
+-type miner_found_share_event() :: #{event       => found_share,
+                                     share       => share()}.
+
+-type action()                  :: {send, raw_msg(), session()}
+                                 | {no_send, session()}
+                                 | {stop, session()}.
+
+-type share()                   :: #{job_id      => job_id(),
+                                     miner_nonce => miner_nonce(),
+                                     pow         => pow()}.
+
+-type job_id()                  :: binary().
+
+-type miner_nonce()             :: aestratum_nonce:part_nonce().
+
+-type pow()                     :: aestratum_miner:pow().
+
 -record(state, {
-          phase,
-          req_id = 0,
-          reqs = maps:new(),   %% cache of sent requests
-          host,
-          port,
-          user,
-          extra_nonce,
-          target
+          phase                 :: phase(),
+          req_id = 0            :: req_id(),
+          reqs = maps:new()     :: #{req_id()    => map()},
+          host                  :: host(),
+          port                  :: integer_port(),
+          user                  :: binary(),
+          extra_nonce           :: extra_nonce() | undefined,
+          target                :: target() | undefined
         }).
 
+-opaque session()               :: #state{}.
 
 -define(USER_AGENT, <<"aeclient/1.0.0">>). %% TODO: get version programatically
 -define(MAX_RETRIES, application:get_env(aestratum, max_retries, 3)).
@@ -29,14 +88,17 @@
 
 %% API.
 
+-spec new(config()) -> session().
 new(#{host := Host, port := Port, user := User, password := null}) ->
     #state{phase = connected, host = Host, port = Port, user = User}.
 
+-spec handle_event(event(), session()) -> action().
 handle_event({conn, What}, State)  ->
     handle_conn_event(What, State);
 handle_event({miner, What}, State) ->
     handle_miner_event(What, State).
 
+-spec close(session()) -> ok.
 close(State) ->
     close_session(State),
     ok.
@@ -57,8 +119,8 @@ handle_conn_event(#{event := timeout, id := Id}, #state{reqs = Reqs} = State) ->
 handle_conn_event(#{event := close}, State) ->
     {stop, close_session(State)}.
 
-handle_miner_event(#{event := found_share} = FoundShareEvent, State) ->
-    handle_miner_found_share(FoundShareEvent, State).
+handle_miner_event(#{event := found_share, share := Share}, State) ->
+    handle_miner_found_share(Share, State).
 
 %% Handle received messages.
 
@@ -214,11 +276,11 @@ send_req(ReqType, Retries, State) ->
             end
     end.
 
-send_req(submit, Info, Retries, State) ->
+send_req(submit, Share, Retries, State) ->
     %% TODO: submit request is sent just once, no retries?
     case Retries >= 1 of
         true  -> {no_send, State};
-        false -> send_submit_req(Info, Retries, State)
+        false -> send_submit_req(Share, Retries, State)
     end.
 
 send_configure_req(Retries, #state{req_id = Id, reqs = Reqs} = State) ->
@@ -261,13 +323,12 @@ send_submit_req(#{job_id := JobId, miner_nonce := MinerNonce, pow := Pow} = Info
 
 %% Miner found share event.
 
-handle_miner_found_share(FoundShareEvent, #state{phase = authorized} = State) ->
-    FoundShare = maps:without([event], FoundShareEvent),
-    ?INFO("handle_miner_found_share, found_share: ~p", [FoundShare]),
-    send_req(submit, FoundShare, 0, State);
-handle_miner_found_share(FoundShareEvent, State) ->
-    ?ERROR("handle_miner_found_share, reason: ~p, event: ~p",
-           [unexpected_miner_event, FoundShareEvent]),
+handle_miner_found_share(Share, #state{phase = authorized} = State) ->
+    ?INFO("handle_miner_found_share, share: ~p", [Share]),
+    send_req(submit, Share, 0, State);
+handle_miner_found_share(Share, State) ->
+    ?ERROR("handle_miner_found_share, reason: ~p, share: ~p",
+           [unexpected_share, Share]),
     {no_send, State}.
 
 %% Helper functions.

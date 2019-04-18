@@ -3,7 +3,6 @@
 -behaviour(gen_server).
 
 %% TODO: eunit
-%% TODO: type spec
 
 %% API
 -export([start_link/1]).
@@ -18,12 +17,20 @@
 
 -include("aestratum_client_log.hrl").
 
--type config() :: aestratum_client_config:config().
+-type config()      :: aestratum_client_config:config().
+
+-type socket()      :: gen_tcp:socket().
+
+-type transport()   :: gen_tcp
+                     | ssl.
+
+-type session()     :: aestratum_client_session:session()
+                     | undefined.
 
 -record(state, {
-          socket,
-          transport,
-          session
+          socket    :: socket(),
+          transport :: transport(),
+          session   :: session()
          }).
 
 -define(SERVER, ?MODULE).

@@ -235,8 +235,10 @@ when_connected(notify_ntf) ->
 when_connected(found_share_msg) ->
     T = <<"when connected - found_share_msg">>,
     MinerNonce = ?NONCE_MODULE:new(miner, 1, 4),
-    L = [{{miner, #{event => found_share, job_id => ?TEST_JOB_ID,
-                    miner_nonce => MinerNonce, pow => ?TEST_POW}},
+    L = [{{miner, #{event => found_share,
+                    share => #{job_id => ?TEST_JOB_ID,
+                               miner_nonce => MinerNonce,
+                               pow => ?TEST_POW}}},
           {no_send,
            #{phase => connected}}
          }],
@@ -314,8 +316,10 @@ when_configured(notify_ntf) ->
 when_configured(found_share_msg) ->
     T = <<"when configured - found_share_msg">>,
     MinerNonce = ?NONCE_MODULE:new(miner, 1, 4),
-    L = [{{miner, #{event => found_share, job_id => ?TEST_JOB_ID,
-                    miner_nonce => MinerNonce, pow => ?TEST_POW}},
+    L = [{{miner, #{event => found_share,
+                    share => #{job_id => ?TEST_JOB_ID,
+                               miner_nonce => MinerNonce,
+                               pow => ?TEST_POW}}},
           {no_send,
            #{phase => configured}}
          }],
@@ -401,8 +405,10 @@ when_subscribed(notify_ntf) ->
 when_subscribed(found_share_msg) ->
     T = <<"when subscribed - found_share_msg">>,
     MinerNonce = ?NONCE_MODULE:new(miner, 16#11223344, 4),
-    L = [{{miner, #{event => found_share, job_id => ?TEST_JOB_ID,
-                    miner_nonce => MinerNonce, pow => ?TEST_POW}},
+    L = [{{miner, #{event => found_share,
+                    share => #{job_id => ?TEST_JOB_ID,
+                               miner_nonce => MinerNonce,
+                               pow => ?TEST_POW}}},
           {no_send,
            #{phase => subscribed}}
          }],
@@ -443,8 +449,10 @@ when_authorized(notify_ntf) ->
 when_authorized(found_share_msg) ->
     T = <<"when authorized - found_share_msg">>,
     MinerNonce = ?NONCE_MODULE:new(miner, 16#aabb, 2),
-    L = [{{miner, #{event => found_share, job_id => ?TEST_JOB_ID,
-                    miner_nonce => MinerNonce, pow => ?TEST_POW}},
+    L = [{{miner, #{event => found_share,
+                    share => #{job_id => ?TEST_JOB_ID,
+                               miner_nonce => MinerNonce,
+                               pow => ?TEST_POW}}},
           {send,
            #{type => req, method => submit, id => 3, user => ?TEST_USER,
              job_id => ?TEST_JOB_ID,

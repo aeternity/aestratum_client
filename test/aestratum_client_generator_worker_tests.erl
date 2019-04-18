@@ -140,9 +140,9 @@ generate_when_no_worker_abort_worker_valid_solution(Pid) ->
     check_miner(Miner),
     check_worker(Worker, undefined),
     check_event({miner, #{event => found_share,
-                          job_id => ?TEST_JOB_ID1,
-                          miner_nonce => MinerNonce1,
-                          pow => Pow}}).
+                          share => #{job_id => ?TEST_JOB_ID1,
+                                     miner_nonce => MinerNonce1,
+                                     pow => Pow}}}).
 
 generate_when_no_worker_keep_worker_keep_mining(Pid) ->
     Job = ?TEST_JOB1(false),
@@ -204,9 +204,9 @@ generate_when_no_worker_keep_worker_valid_solution(Pid) ->
     check_miner(Miner),
     check_worker(Worker, undefined),
     check_event({miner, #{event => found_share,
-                          job_id => ?TEST_JOB_ID1,
-                          miner_nonce => MinerNonce1,
-                          pow => Pow}}).
+                          share => #{job_id => ?TEST_JOB_ID1,
+                                     miner_nonce => MinerNonce1,
+                                     pow => Pow}}}).
 
 generate_when_worker_abort_worker_keep_mining(Pid) ->
     Job1 = ?TEST_JOB1(true),
@@ -284,9 +284,9 @@ generate_when_worker_abort_worker_valid_solution(Pid) ->
     check_miner(Miner),
     check_worker(Worker, undefined),
     check_event({miner, #{event => found_share,
-                          job_id => ?TEST_JOB_ID2,
-                          miner_nonce => MinerNonce3,
-                          pow => Pow}}).
+                          share => #{job_id => ?TEST_JOB_ID2,
+                                     miner_nonce => MinerNonce3,
+                                     pow => Pow}}}).
 
 generate_when_worker_keep_worker_keep_mining(Pid) ->
     Job1 = ?TEST_JOB1(true),
