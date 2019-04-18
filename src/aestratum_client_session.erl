@@ -69,7 +69,7 @@
 
 -type pow()                     :: aestratum_miner:pow().
 
--record(state, {
+-record(session, {
           phase                 :: phase(),
           req_id = 0            :: req_id(),
           reqs = maps:new()     :: #{req_id()    => map()},
@@ -80,7 +80,7 @@
           target                :: target() | undefined
         }).
 
--opaque session()               :: #state{}.
+-opaque session()               :: #session{}.
 
 -define(USER_AGENT, <<"aeclient/1.0.0">>). %% TODO: get version programatically
 -define(MAX_RETRIES, application:get_env(aestratum, max_retries, 3)).
@@ -90,41 +90,41 @@
 
 -spec new(config()) -> session().
 new(#{host := Host, port := Port, user := User, password := null}) ->
-    #state{phase = connected, host = Host, port = Port, user = User}.
+    #session{phase = connected, host = Host, port = Port, user = User}.
 
 -spec handle_event(event(), session()) -> action().
-handle_event({conn, What}, State)  ->
-    handle_conn_event(What, State);
-handle_event({miner, What}, State) ->
-    handle_miner_event(What, State).
+handle_event({conn, What}, Session)  ->
+    handle_conn_event(What, Session);
+handle_event({miner, What}, Session) ->
+    handle_miner_event(What, Session).
 
 -spec close(session()) -> ok.
-close(State) ->
-    close_session(State),
+close(Session) ->
+    close_session(Session),
     ok.
 
 %% Internal functions.
 
-handle_conn_event(#{event := init}, #state{phase = connected} = State) ->
-    send_req(configure, 0, State);
-handle_conn_event(#{event := recv_data, data := RawMsg}, State) ->
+handle_conn_event(#{event := init}, #session{phase = connected} = Session) ->
+    send_req(configure, 0, Session);
+handle_conn_event(#{event := recv_data, data := RawMsg}, Session) ->
     case aestratum_jsonrpc:decode(RawMsg) of
-        {ok, Msg}    -> recv_msg(Msg, State);
-        {error, Rsn} -> recv_msg_error(Rsn, State)
+        {ok, Msg}    -> recv_msg(Msg, Session);
+        {error, Rsn} -> recv_msg_error(Rsn, Session)
     end;
 %% TODO: {reconnect, Host, Port, WaitTime},...
-handle_conn_event(#{event := timeout, id := Id}, #state{reqs = Reqs} = State) ->
+handle_conn_event(#{event := timeout, id := Id}, #session{reqs = Reqs} = Session) ->
     TimeoutInfo = find_req(Id, Reqs),
-    handle_conn_timeout(Id, TimeoutInfo, State);
-handle_conn_event(#{event := close}, State) ->
-    {stop, close_session(State)}.
+    handle_conn_timeout(Id, TimeoutInfo, Session);
+handle_conn_event(#{event := close}, Session) ->
+    {stop, close_session(Session)}.
 
-handle_miner_event(#{event := found_share, share := Share}, State) ->
-    handle_miner_found_share(Share, State).
+handle_miner_event(#{event := found_share, share := Share}, Session) ->
+    handle_miner_found_share(Share, Session).
 
 %% Handle received messages.
 
-recv_msg(#{type := rsp, id := Id} = Rsp, #state{reqs = Reqs} = State) ->
+recv_msg(#{type := rsp, id := Id} = Rsp, #session{reqs = Reqs} = Session) ->
     case find_req(Id, Reqs) of
         #{req := #{method := Method}} ->
             %% Received response with correct Id.
@@ -133,68 +133,68 @@ recv_msg(#{type := rsp, id := Id} = Rsp, #state{reqs = Reqs} = State) ->
                     %% Response validation success. The request to which the
                     %% response was sent is deleted from the sent requests and
                     %% timer is cancelled, too.
-                    recv_rsp(Rsp1, State#state{reqs = del_req(Id, Reqs)});
+                    recv_rsp(Rsp1, Session#session{reqs = del_req(Id, Reqs)});
                 {error, Rsn} ->
                     %% Response validation error.
-                    recv_msg_error(Rsn, State)
+                    recv_msg_error(Rsn, Session)
             end;
         not_found ->
             %% Received unexpected response (no matching Id in sent requests).
             ?ERROR("recv_rsp, reason: ~p", [req_id_not_found]),
-            {no_send, State}
+            {no_send, Session}
     end;
-recv_msg(#{type := ntf} = Ntf, State) ->
-    recv_ntf(Ntf, State);
-recv_msg(#{type := req, method := reconnect}, State) ->
+recv_msg(#{type := ntf} = Ntf, Session) ->
+    recv_ntf(Ntf, Session);
+recv_msg(#{type := req, method := reconnect}, Session) ->
     ?ERROR("recv_msg, reason: ~p", [reconnect_not_implemented]),
-    {no_send, State}.
+    {no_send, Session}.
 
 %% Handle decoded (without error) message from server.
 
 recv_rsp(#{method := configure, result := []} = Rsp,
-          #state{phase = connected} = State) ->
+          #session{phase = connected} = Session) ->
     %% TODO: configure has no params (yet).
     ?INFO("recv_configure_rsp, rsp: ~p", [Rsp]),
-    send_req(subscribe, 0, State#state{phase = configured});
+    send_req(subscribe, 0, Session#session{phase = configured});
 recv_rsp(#{method := subscribe, result := [_SessionId, ExtraNonce]} = Rsp,
-          #state{phase = configured} = State) ->
+          #session{phase = configured} = Session) ->
     ?INFO("recv_subscribe_rsp, rsp: ~p", [Rsp]),
     %% TODO: save SessionId(?)
     NBytes = byte_size(ExtraNonce) div 2,
     ExtraNonce1 = aestratum_nonce:to_int(extra, ExtraNonce, NBytes),
     ExtraNonce2 = aestratum_nonce:new(extra, ExtraNonce1, NBytes),
-    send_req(authorize, 0, State#state{phase = subscribed,
+    send_req(authorize, 0, Session#session{phase = subscribed,
                                        extra_nonce = ExtraNonce2});
 recv_rsp(#{method := authorize, result := true} = Rsp,
-          #state{phase = subscribed} = State) ->
+          #session{phase = subscribed} = Session) ->
     ?INFO("recv_authorize_rsp, rsp: ~p", [Rsp]),
-    {no_send, State#state{phase = authorized}};
+    {no_send, Session#session{phase = authorized}};
 recv_rsp(#{method := authorize, result := false} = Rsp,
-          #state{phase = subscribed} = State) ->
+          #session{phase = subscribed} = Session) ->
     ?INFO("recv_authorize_rsp, rsp: ~p", [Rsp]),
-    {stop, close_session(State)};
+    {stop, close_session(Session)};
 recv_rsp(#{method := submit, result := true} = Rsp,
-          #state{phase = authorized} = State) ->
+          #session{phase = authorized} = Session) ->
     ?INFO("recv_submit_rsp, rsp: ~p", [Rsp]),
-    {no_send, State};
+    {no_send, Session};
 recv_rsp(#{method := submit, result := false} = Rsp,
-          #state{phase = authorized} = State) ->
+          #session{phase = authorized} = Session) ->
     ?INFO("recv_submit_rsp, rsp: ~p", [Rsp]),
-    {no_send, State};
+    {no_send, Session};
 recv_rsp(#{method := _Method, reason := _Rsn, msg := _ErrMsg,
-           data := _ErrData} = Rsp, State) ->
+           data := _ErrData} = Rsp, Session) ->
     ?ERROR("recv_error_rsp, rsp: ~p", [Rsp]),
     %% TODO: maybe retry
-    {no_send, State}.
+    {no_send, Session}.
 
 recv_ntf(#{method := set_target, target := Target} = Ntf,
-         #state{phase = authorized} = State) ->
+         #session{phase = authorized} = Session) ->
     ?INFO("recv_set_target_ntf, ntf: ~p", [Ntf]),
-    {no_send, State#state{target = aestratum_target:to_int(Target)}};
+    {no_send, Session#session{target = aestratum_target:to_int(Target)}};
 recv_ntf(#{method := notify, job_id := _JobId, block_version := _Blockversion,
            block_hash := _BlockHash, empty_queue := _EmptyQueue} = Ntf,
-         #state{phase = authorized, extra_nonce = ExtraNonce,
-                target = Target} = State) ->
+         #session{phase = authorized, extra_nonce = ExtraNonce,
+                target = Target} = Session) ->
     ?INFO("recv_notify_ntf, ntf: ~p", [Ntf]),
     Job = maps:without([method], Ntf),
     Job1 = Job#{target => Target},
@@ -207,138 +207,138 @@ recv_ntf(#{method := notify, job_id := _JobId, block_version := _Blockversion,
         {error, Rsn} ->
             ?WARN("generate, reason: ~p", [Rsn])
     end,
-    {no_send, State};
-recv_ntf(Ntf, State) ->
+    {no_send, Session};
+recv_ntf(Ntf, Session) ->
     ?ERROR("recv_ntf, ntf: ~p", [Ntf]),
-    {no_send, State}.
+    {no_send, Session}.
 
 %% Handle badly encoded/invalid messages from server.
 
-recv_msg_error(parse_error = Rsn, State) ->
+recv_msg_error(parse_error = Rsn, Session) ->
     ?ERROR("recv_msg_error, reason: ~p", [Rsn]),
-    {stop, close_session(State)};
-recv_msg_error({invalid_msg = Rsn, MaybeId}, State) ->
+    {stop, close_session(Session)};
+recv_msg_error({invalid_msg = Rsn, MaybeId}, Session) ->
     ?ERROR("recv_msg_error, reason: ~p, id: ~p", [Rsn, MaybeId]),
-    {stop, close_session(State)};
-recv_msg_error({invalid_method = Rsn, MaybeId}, State) ->
+    {stop, close_session(Session)};
+recv_msg_error({invalid_method = Rsn, MaybeId}, Session) ->
     ?ERROR("recv_msg_error, reason: ~p, id: ~p", [Rsn, MaybeId]),
-    {stop, close_session(State)};
-recv_msg_error({invalid_param = Rsn, Param, MaybeId}, State) ->
+    {stop, close_session(Session)};
+recv_msg_error({invalid_param = Rsn, Param, MaybeId}, Session) ->
     ?ERROR("recv_msg_error, reason: ~p, param: ~p, id: ~p",
            [Rsn, Param, MaybeId]),
-    {stop, close_session(State)};
-recv_msg_error({internal_error = Rsn, MaybeId}, State) ->
+    {stop, close_session(Session)};
+recv_msg_error({internal_error = Rsn, MaybeId}, Session) ->
     ?ERROR("recv_msg_error, reason: ~p, id: ~p", [Rsn, MaybeId]),
-    {stop, close_session(State)}.
+    {stop, close_session(Session)}.
 
 %% Handle timeout.
 
 handle_conn_timeout(Id, #{phase := connected, retries := Retries},
-                    #state{phase = connected, reqs = Reqs} = State) ->
+                    #session{phase = connected, reqs = Reqs} = Session) ->
     ?INFO("handle_conn_timeout, req_id: ~p", [Id]),
-    send_req(configure, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
+    send_req(configure, Retries + 1, Session#session{reqs = del_req(Id, Reqs)});
 handle_conn_timeout(Id, #{phase := configured, retries := Retries},
-                    #state{phase = configured, reqs = Reqs} = State) ->
+                    #session{phase = configured, reqs = Reqs} = Session) ->
     ?INFO("handle_conn_timeout, req_id: ~p", [Id]),
-    send_req(subscribe, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
+    send_req(subscribe, Retries + 1, Session#session{reqs = del_req(Id, Reqs)});
 handle_conn_timeout(Id, #{phase := subscribed, retries := Retries},
-                    #state{phase = subscribed, reqs = Reqs} = State) ->
+                    #session{phase = subscribed, reqs = Reqs} = Session) ->
     ?INFO("handle_conn_timeout, req_id: ~p", [Id]),
-    send_req(authorize, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
+    send_req(authorize, Retries + 1, Session#session{reqs = del_req(Id, Reqs)});
 handle_conn_timeout(Id, #{phase := authorized, retries := Retries, info := Info},
-                    #state{phase = authorized, reqs = Reqs} = State) ->
+                    #session{phase = authorized, reqs = Reqs} = Session) ->
     ?INFO("handle_conn_timeout, req_id: ~p", [Id]),
-    send_req(submit, Info, Retries + 1, State#state{reqs = del_req(Id, Reqs)});
+    send_req(submit, Info, Retries + 1, Session#session{reqs = del_req(Id, Reqs)});
 %% This timeout was set in one phase and got triggered when the session moved
 %% to a next phase (it got triggered during phase switch). The timeout is not
 %% valid anymore, there is no action required.
 handle_conn_timeout(Id, #{phase := Phase},
-                    #state{phase = Phase1, reqs = Reqs} = State) when
+                    #session{phase = Phase1, reqs = Reqs} = Session) when
       Phase =/= Phase1 ->
-    {no_send, State#state{reqs = del_req(Id, Reqs)}};
-handle_conn_timeout(Id, not_found, State) ->
+    {no_send, Session#session{reqs = del_req(Id, Reqs)}};
+handle_conn_timeout(Id, not_found, Session) ->
     ?ERROR("handle_conn_timeout, reason: ~p, req_id: ~p",
            [unexpected_timeout, Id]),
-    {no_send, State}.
+    {no_send, Session}.
 
 %% Client to server requests.
 
-send_req(ReqType, Retries, State) ->
+send_req(ReqType, Retries, Session) ->
     case Retries > ?MAX_RETRIES of
         true ->
             ?WARN("send_req aborted, reason: ~p", [max_retries_exhausted]),
-            {stop, close_session(State)};
+            {stop, close_session(Session)};
         false ->
             case ReqType of
-                configure -> send_configure_req(Retries, State);
-                subscribe -> send_subscribe_req(Retries, State);
-                authorize -> send_authorize_req(Retries, State)
+                configure -> send_configure_req(Retries, Session);
+                subscribe -> send_subscribe_req(Retries, Session);
+                authorize -> send_authorize_req(Retries, Session)
             end
     end.
 
-send_req(submit, Share, Retries, State) ->
+send_req(submit, Share, Retries, Session) ->
     %% TODO: submit request is sent just once, no retries?
     case Retries >= 1 of
-        true  -> {no_send, State};
-        false -> send_submit_req(Share, Retries, State)
+        true  -> {no_send, Session};
+        false -> send_submit_req(Share, Retries, Session)
     end.
 
-send_configure_req(Retries, #state{req_id = Id, reqs = Reqs} = State) ->
+send_configure_req(Retries, #session{req_id = Id, reqs = Reqs} = Session) ->
     ReqMap = #{type => req, method => configure, id => Id, params => []},
     ?INFO("send_configure_req, req: ~p", [ReqMap]),
     {send, encode(ReqMap),
-     State#state{req_id = next_id(Id),
+     Session#session{req_id = next_id(Id),
                  reqs = add_req(Id, connected, Retries, ReqMap, Reqs)}}.
 
-send_subscribe_req(Retries, #state{req_id = Id, reqs = Reqs,
-                                   host = Host, port = Port} = State) ->
+send_subscribe_req(Retries, #session{req_id = Id, reqs = Reqs,
+                                     host = Host, port = Port} = Session) ->
     ReqMap = #{type => req, method => subscribe, id => Id,
                user_agent => ?USER_AGENT, session_id => null, host => Host,
                port => Port},
     ?INFO("send_subscribe_req, req: ~p", [ReqMap]),
     {send, encode(ReqMap),
-     State#state{req_id = next_id(Id),
-                 reqs = add_req(Id, configured, Retries, ReqMap, Reqs)}}.
+     Session#session{req_id = next_id(Id),
+                     reqs = add_req(Id, configured, Retries, ReqMap, Reqs)}}.
 
-send_authorize_req(Retries, #state{req_id = Id, reqs = Reqs,
-                                   user = User} = State) ->
+send_authorize_req(Retries, #session{req_id = Id, reqs = Reqs,
+                                     user = User} = Session) ->
     ReqMap = #{type => req, method => authorize, id => Id,
                user => User, password => null},
     ?INFO("send_authorize_req, req: ~p", [ReqMap]),
     {send, encode(ReqMap),
-     State#state{req_id = next_id(Id),
+     Session#session{req_id = next_id(Id),
                  reqs = add_req(Id, subscribed, Retries, ReqMap, Reqs)}}.
 
 send_submit_req(#{job_id := JobId, miner_nonce := MinerNonce, pow := Pow} = Info,
-                Retries, #state{req_id = Id, reqs = Reqs,
-                                user = User} = State) ->
+                Retries, #session{req_id = Id, reqs = Reqs,
+                                  user = User} = Session) ->
     MinerNonce1 = aestratum_nonce:to_hex(MinerNonce),
     ReqMap = #{type => req, method => submit, id => Id,
                user => User, job_id => JobId, miner_nonce => MinerNonce1,
                pow => Pow},
     ?INFO("send_submit_req, req: ~p", [ReqMap]),
     {send, encode(ReqMap),
-     State#state{req_id = next_id(Id),
-                 reqs = add_req(Id, authorized, Info, Retries, ReqMap, Reqs)}}.
+     Session#session{req_id = next_id(Id),
+                     reqs = add_req(Id, authorized, Info, Retries, ReqMap, Reqs)}}.
 
 %% Miner found share event.
 
-handle_miner_found_share(Share, #state{phase = authorized} = State) ->
+handle_miner_found_share(Share, #session{phase = authorized} = Session) ->
     ?INFO("handle_miner_found_share, share: ~p", [Share]),
-    send_req(submit, Share, 0, State);
-handle_miner_found_share(Share, State) ->
+    send_req(submit, Share, 0, Session);
+handle_miner_found_share(Share, Session) ->
     ?ERROR("handle_miner_found_share, reason: ~p, share: ~p",
            [unexpected_share, Share]),
-    {no_send, State}.
+    {no_send, Session}.
 
 %% Helper functions.
 
-close_session(#state{phase = Phase, reqs = Reqs} = State) when
+close_session(#session{phase = Phase, reqs = Reqs} = Session) when
       Phase =/= disconnected ->
     ?CRITICAL("close_session", []),
-    State#state{phase = disconnected, reqs = clean_reqs(Reqs)};
-close_session(State) ->
-    State.
+    Session#session{phase = disconnected, reqs = clean_reqs(Reqs)};
+close_session(Session) ->
+    Session.
 
 add_req(Id, Phase, Retries, Req, Reqs) ->
     add_req(Id, Phase, undefined, Retries, Req, Reqs).
@@ -378,8 +378,8 @@ encode(Map) ->
 %% Used for testing.
 
 -ifdef(TEST).
-state(#state{phase = Phase, req_id = ReqId, reqs = Reqs,
-             extra_nonce = ExtraNonce, target = Target}) ->
+state(#session{phase = Phase, req_id = ReqId, reqs = Reqs,
+               extra_nonce = ExtraNonce, target = Target}) ->
     Target1 =
         case Target of
             T when T =/= undefined ->
@@ -389,7 +389,7 @@ state(#state{phase = Phase, req_id = ReqId, reqs = Reqs,
         end,
     #{phase       => Phase,
       req_id      => ReqId,
-      reqs        => maps:map(fun(Id, #{phase := Phase}) -> Phase end, Reqs),
+      reqs        => maps:map(fun(_Id, #{phase := P}) -> P end, Reqs),
       extra_nonce => ExtraNonce,
       target      => Target1
      }.

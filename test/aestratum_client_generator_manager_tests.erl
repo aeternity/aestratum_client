@@ -120,7 +120,7 @@ prep_workers([{Id, Pid, Repeats, _Status} | Rest], Workers) ->
 prep_workers([], Workers) ->
     meck:expect(?CLIENT_GENERATOR_WORKER_MODULE, generate,
                 fun(Pid, _, _, _) ->
-                        {Id, Pid, Repeats, Status} = lists:keyfind(Pid, 2, Workers),
+                        {_Id, Pid, Repeats, Status} = lists:keyfind(Pid, 2, Workers),
                         {worker_action(Status), Repeats}
                 end).
 

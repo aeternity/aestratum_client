@@ -38,5 +38,5 @@ handle_cast(_Req, State) ->
     {noreply, State}.
 
 handle_info(Event, #state{events = Events} = State) ->
-    {noreply, #state{events = [Event | Events]}}.
+    {noreply, State#state{events = [Event | Events]}}.
 
