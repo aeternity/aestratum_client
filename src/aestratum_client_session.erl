@@ -145,7 +145,7 @@ recv_msg(#{type := rsp, id := Id} = Rsp, #state{reqs = Reqs} = State) ->
     end;
 recv_msg(#{type := ntf} = Ntf, State) ->
     recv_ntf(Ntf, State);
-recv_msg(#{type := req, method := reconnect} = Req, State) ->
+recv_msg(#{type := req, method := reconnect}, State) ->
     ?ERROR("recv_msg, reason: ~p", [reconnect_not_implemented]),
     {no_send, State}.
 
@@ -156,7 +156,7 @@ recv_rsp(#{method := configure, result := []} = Rsp,
     %% TODO: configure has no params (yet).
     ?INFO("recv_configure_rsp, rsp: ~p", [Rsp]),
     send_req(subscribe, 0, State#state{phase = configured});
-recv_rsp(#{method := subscribe, result := [SessionId, ExtraNonce]} = Rsp,
+recv_rsp(#{method := subscribe, result := [_SessionId, ExtraNonce]} = Rsp,
           #state{phase = configured} = State) ->
     ?INFO("recv_subscribe_rsp, rsp: ~p", [Rsp]),
     %% TODO: save SessionId(?)
@@ -181,8 +181,8 @@ recv_rsp(#{method := submit, result := false} = Rsp,
           #state{phase = authorized} = State) ->
     ?INFO("recv_submit_rsp, rsp: ~p", [Rsp]),
     {no_send, State};
-recv_rsp(#{method := Method, reason := Rsn, msg := ErrMsg,
-           data := ErrData} = Rsp, State) ->
+recv_rsp(#{method := _Method, reason := _Rsn, msg := _ErrMsg,
+           data := _ErrData} = Rsp, State) ->
     ?ERROR("recv_error_rsp, rsp: ~p", [Rsp]),
     %% TODO: maybe retry
     {no_send, State}.
@@ -191,8 +191,8 @@ recv_ntf(#{method := set_target, target := Target} = Ntf,
          #state{phase = authorized} = State) ->
     ?INFO("recv_set_target_ntf, ntf: ~p", [Ntf]),
     {no_send, State#state{target = aestratum_target:to_int(Target)}};
-recv_ntf(#{method := notify, job_id := JobId, block_version := Blockversion,
-           block_hash := BlockHash, empty_queue := EmptyQueue} = Ntf,
+recv_ntf(#{method := notify, job_id := _JobId, block_version := _Blockversion,
+           block_hash := _BlockHash, empty_queue := _EmptyQueue} = Ntf,
          #state{phase = authorized, extra_nonce = ExtraNonce,
                 target = Target} = State) ->
     ?INFO("recv_notify_ntf, ntf: ~p", [Ntf]),
