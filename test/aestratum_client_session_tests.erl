@@ -7,7 +7,10 @@
 -define(NONCE_MODULE, aestratum_nonce).
 -define(CLIENT_GENERATOR_MANAGER_MODULE, aestratum_client_generator_manager).
 
--define(TEST_USER, <<"ak_DummyPubKeyDoNotEverUse999999999999999999999999999">>).
+-define(TEST_ACCOUNT, <<"ak_DummyPubKeyDoNotEverUse999999999999999999999999999">>).
+-define(TEST_WORKER, <<"worker1">>).
+-define(TEST_USER, {?TEST_ACCOUNT, ?TEST_WORKER}).
+
 -define(TEST_TARGET,
         <<"0000ff0000000000000000000000000000000000000000000000000000000000">>).
 -define(TEST_JOB_ID, <<"0102030405060708">>).
@@ -34,7 +37,8 @@ client_session() ->
              SessionOpts =
                 #{host => <<"pool.aeternity.com">>,
                   port => 9999,
-                  user => <<"ak_DummyPubKeyDoNotEverUse999999999999999999999999999">>,
+                  account => ?TEST_ACCOUNT,
+                  worker => ?TEST_WORKER,
                   password => null},
              {ok, Pid} = aestratum_dummy_handler:start_link(?TEST_MODULE, SessionOpts),
              Pid

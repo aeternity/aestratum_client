@@ -89,7 +89,9 @@
 %% API.
 
 -spec new(config()) -> session().
-new(#{host := Host, port := Port, user := User, password := null}) ->
+new(#{host := Host, port := Port, account := Account, worker := Worker,
+      password := null}) ->
+    User = {Account, Worker},
     #session{phase = connected, host = Host, port = Port, user = User}.
 
 -spec handle_event(event(), session()) -> action().

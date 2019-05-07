@@ -26,8 +26,9 @@ read() ->
              req_retries  => maps:get(<<"req_retries">>, ConnCfg),
              socket_opts  => []}, %% not taken from config
        user_cfg =>
-           #{user       => maps:get(<<"user">>, UserCfg),
-             password   => null}, %% not taken from config
+           #{account      => maps:get(<<"account">>, UserCfg),
+             worker       => maps:get(<<"worker">>, UserCfg),
+             password     => null}, %% not taken from config
        miners_cfg =>
            [maps:fold(
               fun (K, V, Acc) -> Acc#{binary_to_atom(K, utf8) => V} end,

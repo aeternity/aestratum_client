@@ -41,11 +41,17 @@
             "type" : "object",
             "additionalProperties" : false,
             "properties" : {
-                "user" : {
+                "account" : {
                     "description" : "Public key where reward is sent.",
                     "type" : "string",
                     "example" : "ak_DummyPubKeyDoNotEverUse999999999999999999999999999",
                     "pattern": "^ak_[1-9A-HJ-NP-Za-km-z]*$"
+                },
+                "worker" : {
+                    "description" : "Name of the worker.",
+                    "type" : "string",
+                    "example" : "worker1",
+                    "pattern" : "^[0-9A-Za-z]+$"
                 }
             }
         },
