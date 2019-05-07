@@ -27,6 +27,12 @@
 
 -type integer_port()            :: non_neg_integer().
 
+-type user()                    :: {account(), worker()}.
+
+-type account()                 :: binary().
+
+-type worker()                  :: binary().
+
 -type extra_nonce()             :: aestratum_nonce:part_nonce().
 
 -type target()                  :: aestratum_target:int_target().
@@ -75,7 +81,7 @@
           reqs = maps:new()     :: #{req_id()    => map()},
           host                  :: host(),
           port                  :: integer_port(),
-          user                  :: binary(),
+          user                  :: user(),
           extra_nonce           :: extra_nonce() | undefined,
           target                :: target() | undefined
         }).
