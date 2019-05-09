@@ -5,6 +5,8 @@
          close/1
         ]).
 
+-export([status/1]).
+
 -ifdef(TEST).
 -export([state/1]).
 -endif.
@@ -110,6 +112,24 @@ handle_event({miner, What}, Session) ->
 close(Session) ->
     close_session(Session),
     ok.
+
+-spec status(session()) -> map().
+status(#session{phase = Phase,
+                req_id = ReqId,
+                reqs = Reqs,
+                host = Host,
+                port = Port,
+                user = User,
+                extra_nonce = ExtraNonce,
+                target = Target}) ->
+    #{phase => Phase,
+      req_id => ReqId,
+      reqs => [{Id, Req} || {Id, #{req := Req}} <- maps:to_list(Reqs)],
+      host => Host,
+      port => Port,
+      user => User,
+      extra_nonce => aestratum_nonce:to_hex(ExtraNonce),
+      target => aestratum_target:to_hex(Target)}.
 
 %% Internal functions.
 

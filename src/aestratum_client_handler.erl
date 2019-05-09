@@ -5,7 +5,9 @@
 %% TODO: eunit
 
 %% API
--export([start_link/1]).
+-export([start_link/1,
+         status/0
+        ]).
 
 %% gen_server.
 -export([init/1,
@@ -45,6 +47,10 @@
 start_link(Cfg) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, Cfg, []).
 
+-spec status() -> map().
+status() ->
+    gen_server:call(?SERVER, status).
+
 %% gen_server callbacks.
 
 init(#{conn_cfg := ConnCfg, user_cfg := UserCfg}) ->
@@ -60,8 +66,9 @@ init(#{conn_cfg := ConnCfg, user_cfg := UserCfg}) ->
     gen_server:cast(self(), {init_session, SessionOpts}),
     {ok, #state{socket = Socket, transport = Transport}}.
 
-handle_call(_Request, _From, State) ->
-	{reply, ok, State}.
+handle_call(status, _From, State) ->
+    Reply = handle_status(State),
+    {reply, Reply, State}.
 
 handle_cast({init_session, SessionOpts}, #state{socket = Socket} = State) when
       Socket =/= undefined ->
@@ -75,7 +82,7 @@ handle_cast({init_session, _SessionOpts}, State) ->
 handle_info({SocketType, _Socket, Data}, State) when ?IS_MSG(SocketType) ->
     handle_socket_data(Data, State);
 handle_info({SocketClose, _Socket}, State) when ?IS_CLOSE(SocketClose) ->
-	handle_socket_close(State);
+    handle_socket_close(State);
 handle_info({SocketError, _Socket, Rsn}, State) when ?IS_ERROR(SocketError) ->
     handle_socket_error(Rsn, State);
 handle_info({conn, _Event} = ConnEvent, State) ->
@@ -92,10 +99,10 @@ terminate(_Rsn, _State) ->
 
 handle_socket_data(Data, #state{socket = Socket, session = Session} = State) ->
     Event = #{event => recv_data, data => Data},
-	Res = aestratum_client_session:handle_event({conn, Event}, Session),
-	case is_stop(Res) of
-	    true  -> ok;
-	    false -> inet:setopts(Socket, [{active, once}])
+    Res = aestratum_client_session:handle_event({conn, Event}, Session),
+    case is_stop(Res) of
+        true  -> ok;
+        false -> inet:setopts(Socket, [{active, once}])
     end,
     result(Res, State).
 
@@ -118,6 +125,11 @@ handle_conn_event({conn, Event}, #state{session = Session} = State) ->
 handle_miner_event({miner, Event}, #state{session = Session} = State) ->
     Res = aestratum_client_session:handle_event({miner, Event}, Session),
     result(Res, State).
+
+handle_status(#state{socket = Socket, transport = Transport,
+                     session = Session}) ->
+    #{conn => #{socket => Socket, transport => Transport},
+      session => aestratum_client_session:status(Session)}.
 
 result({send, Data, Session},
        #state{socket = Socket, transport = Transport} = State) ->
