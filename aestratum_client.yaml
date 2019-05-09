@@ -5,7 +5,8 @@ connection:
         req_timeout: 15
         req_retries: 3
 user:
-        user: "ak_DummyPubKeyDoNotEverUse999999999999999999999999999"
+        account: "ak_DummyPubKeyDoNotEverUse999999999999999999999999999"
+        worker: "worker1"
 miners:
         - exec: "mean29-generic"
           exec_group: "aecuckoo"
