@@ -1,6 +1,6 @@
 {application, aestratum_client,
  [{description, "AE Stratum client"},
-  {vsn, "0.1.0"},
+  {vsn, {cmd, "cat VERSION"}},
   {registered, []},
   {applications,
    [kernel,
