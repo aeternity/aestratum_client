@@ -122,14 +122,24 @@ status(#session{phase = Phase,
                 user = User,
                 extra_nonce = ExtraNonce,
                 target = Target}) ->
+    ExtraNonce1 =
+        case ExtraNonce of
+            N when N =/= undefined -> aestratum_nonce:to_hex(N);
+            undefined              -> undefined
+        end,
+    Target1 =
+        case Target of
+            T when T =/= undefined -> aestratum_target:to_hex(T);
+            undefined              -> undefined
+        end,
     #{phase => Phase,
       req_id => ReqId,
       reqs => [{Id, Req} || {Id, #{req := Req}} <- maps:to_list(Reqs)],
       host => Host,
       port => Port,
       user => User,
-      extra_nonce => aestratum_nonce:to_hex(ExtraNonce),
-      target => aestratum_target:to_hex(Target)}.
+      extra_nonce => ExtraNonce1,
+      target => Target1}.
 
 %% Internal functions.
 
