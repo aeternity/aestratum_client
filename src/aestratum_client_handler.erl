@@ -6,7 +6,8 @@
 
 %% API
 -export([start_link/1,
-         status/0
+         status/0,
+         stop/0
         ]).
 
 %% gen_server.
@@ -50,6 +51,10 @@ start_link(Cfg) ->
 -spec status() -> map().
 status() ->
     gen_server:call(?SERVER, status).
+
+-spec stop() -> ok.
+stop() ->
+    gen_server:stop(?SERVER).
 
 %% gen_server callbacks.
 
