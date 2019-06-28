@@ -20,7 +20,7 @@ read() ->
     {ok,
      #{conn_cfg =>
            #{transport    => binary_to_atom(maps:get(<<"transport">>, ConnCfg, <<"tcp">>), utf8),
-             host         => maps:get(<<"host">>, ConnCfg, <<"pool.aeternity.com">>),
+             host         => maps:get(<<"host">>, ConnCfg, <<"localhost">>),
              port         => maps:get(<<"port">>, ConnCfg),
              req_timeout  => maps:get(<<"req_timeout">>, ConnCfg) * 1000,
              req_retries  => maps:get(<<"req_retries">>, ConnCfg),
