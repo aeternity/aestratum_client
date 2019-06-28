@@ -10,7 +10,7 @@
                 "host" : {
                     "description" : "Stratum server domain name.",
                     "type" : "string",
-                    "default" : "pool.aeternity.com"
+                    "default" : "localhost"
                 },
                 "port" : {
                     "description" : "Stratum server port.",
