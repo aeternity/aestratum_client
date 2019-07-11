@@ -91,8 +91,8 @@
 -opaque session()               :: #session{}.
 
 -define(USER_AGENT, <<"aeclient/1.0.0">>). %% TODO: get version programatically
--define(MAX_RETRIES, application:get_env(aestratum, max_retries, 3)).
--define(MSG_TIMEOUT, application:get_env(aestratum, timeout, 30000)).
+-define(MAX_RETRIES, application:get_env(aestratum_client, connection_req_retries, 3)).
+-define(MSG_TIMEOUT, (application:get_env(aestratum_client, connection_req_timeout, 30) * 1000)).
 
 %% API.
 
@@ -432,4 +432,3 @@ state(#session{phase = Phase, req_id = ReqId, reqs = Reqs,
       target      => Target1
      }.
 -endif.
-

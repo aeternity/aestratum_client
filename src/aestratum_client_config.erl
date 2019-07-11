@@ -96,7 +96,11 @@ do_read_config(F, Schema, Action, Mode) ->
 store([Vars0]) ->
     Vars = to_tree(Vars0),
     set_env(aestratum_client, '$user_config', Vars),
-    set_env(aestratum_client, '$user_map', Vars0).
+    set_env(aestratum_client, '$user_map', Vars0),
+    [[set_env(aestratum_client, {Section, K}, V) || {K, V} <- KVs] ||
+        {Section, KVs} <- Vars],
+    ok.
+
 
 
 read_json(F, Schema, Mode) ->
@@ -186,7 +190,8 @@ to_tree_({K, V}) ->
 to_tree_(E) ->
     E.
 
+set_env(App, {<<Section/binary>>, <<K/binary>>}, V) ->
+    set_env(App, binary_to_atom(<<Section/binary, "_", K/binary>>, utf8), V);
 set_env(App, K, V) ->
     error_logger:info_msg("Set config (~p): ~p = ~p~n", [App, K, V]),
     application:set_env(App, K, V).
-
