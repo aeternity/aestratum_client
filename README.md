@@ -128,4 +128,4 @@ In a cloned directory from the repository, run: `make`
 STARTING of Aestratum client
 ==========
 
-Run: `make shell`
+Run: `make console`
