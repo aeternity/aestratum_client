@@ -10,7 +10,7 @@
   2},
  {<<"aeminer">>,
   {git,"https://github.com/aeternity/aeminer.git",
-      {ref,"90b7ef8e76374733f312973d54e5d928ce9a35f5"}},
+      {ref,"d2ccf9429de230e09fd4819aae87e9d278c93124"}},
   1},
  {<<"aestratum_lib">>,
   {git,"https://github.com/aeternity/aestratum_lib.git",
