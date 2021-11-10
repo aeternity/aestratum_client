@@ -14,7 +14,7 @@
   1},
  {<<"aestratum_lib">>,
   {git,"https://github.com/aeternity/aestratum_lib.git",
-      {ref,"a0432722a990da2b9d8bbf3cb29a345d97f18d16"}},
+      {ref,"62a7d936a8ee5c00b06150ab527a2723182cf7ac"}},
   0},
  {<<"base58">>,
   {git,"https://github.com/aeternity/erl-base58.git",
@@ -35,7 +35,7 @@
   1},
  {<<"lager">>,
   {git,"https://github.com/erlang-lager/lager.git",
-      {ref,"69b4ada2341b8ab2cf5c8e464ac936e5e4a9f62b"}},
+      {ref,"fae53399253da622afde3bf5fb5ff124b7d887fa"}},
   0},
  {<<"rfc3339">>,{pkg,<<"rfc3339">>,<<"0.2.2">>},1},
  {<<"yamerl">>,{pkg,<<"yamerl">>,<<"0.7.0">>},0}]}.
