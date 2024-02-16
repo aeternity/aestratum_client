@@ -171,7 +171,7 @@ init() ->
     [{T, test, E, R} || {E, R} <- L].
 
 when_connected(timeout_0_retries) ->
-    application:set_env(aestratum, max_retries, 0),
+    application:set_env(aestratum_client, connection_req_retries, 0),
     T = <<"when connected - timeout, 0 retries">>,
     L = [{{conn, #{event => timeout, id => 0, phase => connected}},
           {stop,
@@ -179,7 +179,7 @@ when_connected(timeout_0_retries) ->
          }],
     prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L];
 when_connected(timeout_1_retries) ->
-    application:set_env(aestratum, max_retries, 1),
+    application:set_env(aestratum_client, connection_req_retries, 1),
     T = <<"when connected - timeout, 1 retries">>,
     L = [{{conn, #{event => timeout, id => 0, phase => connected}},
           {send,
@@ -258,7 +258,6 @@ when_connected(configure_rsp) ->
     prep_connected(T) ++ [{T, test, E, R} || {E, R} <- L].
 
 when_configured(timeout) ->
-    application:set_env(aestratum, max_retries, 1),
     T = <<"when configured - timeout">>,
     L = [{{conn, #{event => timeout, id => 1, phase => configured}},
           {send,
